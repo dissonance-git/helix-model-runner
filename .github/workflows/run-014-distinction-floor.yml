@@ -59,11 +59,13 @@ jobs:
           import importlib.util
           import json
           import os
+          import sys
           from pathlib import Path
           import numpy as np
 
           spec = importlib.util.spec_from_file_location('distinction_effective', 'distinction_effective.py')
           probe = importlib.util.module_from_spec(spec)
+          sys.modules[spec.name] = probe
           spec.loader.exec_module(probe)
 
           ranks = (1, 2, 4, 8, 16)
