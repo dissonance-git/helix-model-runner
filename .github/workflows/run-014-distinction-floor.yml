@@ -1,0 +1,168 @@
+name: Helix Model Run 014 - distinction floor
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/run-014-distinction-floor.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  distinction-floor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      FLYAI_COMMIT: fcf825d1f506db698a84850b005657df6ec8df3c
+      FLY_DATA: /tmp/helix-fly-data
+      NUMBA_NUM_THREADS: '4'
+      OMP_NUM_THREADS: '4'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install exact frozen donor
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check numpy==2.1.3 scipy==1.14.1 numba==0.61.2
+          python -m pip install --disable-pip-version-check --no-deps "git+https://github.com/alextitonis/fly.ai.git@${FLYAI_COMMIT}"
+
+      - name: Build exact readout-rank variants
+        shell: python
+        run: |
+          from pathlib import Path
+
+          source = Path('connectome_temporal_probe.py').read_text(encoding='utf-8')
+          replacements = {
+              'PROBE_DELAYS_S = (0.0, 0.04, 0.10, 0.20)':
+                  'PROBE_DELAYS_S = (0.04,)',
+              'rng = np.random.default_rng(base_seed + int(round(dt * 1e6)) + (rewire_seed or 0))':
+                  'rng = np.random.default_rng(base_seed + int(round(dt * 1e6)))',
+              'X = np.asarray(by_delay[delay], np.float32)\n        if len(X) != len(y):':
+                  'X = np.asarray(by_delay[delay], np.float32)\n        X = X / (np.linalg.norm(X, axis=1, keepdims=True) + 1e-6)\n        if len(X) != len(y):',
+              '''def grouped_cv_accuracy(X: np.ndarray, y: np.ndarray, groups: np.ndarray) -> float:\n    correct = total = 0\n    for g in np.unique(groups):\n        te = groups == g\n        tr = ~te\n        pred = fit_predict_ridge(X[tr], y[tr], X[te])\n        correct += int(np.sum(pred == y[te]))\n        total += int(np.sum(te))\n    return correct / total if total else float("nan")''':
+                  '''def grouped_cv_predictions(X: np.ndarray, y: np.ndarray, groups: np.ndarray) -> np.ndarray:\n    predictions = np.empty_like(y)\n    for group in np.unique(groups):\n        te = groups == group\n        tr = ~te\n        predictions[te] = fit_predict_ridge(X[tr], y[tr], X[te])\n    return predictions\n\n\ndef grouped_cv_accuracy(X: np.ndarray, y: np.ndarray, groups: np.ndarray) -> float:\n    pred = grouped_cv_predictions(X, y, groups)\n    return float(np.mean(pred == y))''',
+              '''        results[str(delay)] = {\n            "accuracy": grouped_cv_accuracy(X, y, g),\n            "centroid_margin": centroid_margin(X, y),''':
+                  '''        predictions = grouped_cv_predictions(X, y, g)\n        results[str(delay)] = {\n            "accuracy": float(np.mean(predictions == y)),\n            "prediction_sha256": hashlib.sha256(predictions.astype(np.int64).tobytes()).hexdigest(),\n            "centroid_margin": centroid_margin(X, y),''',
+          }
+          for old, new in replacements.items():
+              if old not in source:
+                  raise SystemExit(f'expected frozen source fragment missing: {old[:100]!r}')
+              source = source.replace(old, new, 1)
+
+          ranks = (1, 2, 4, 8, 16)
+          for rank in ranks:
+              marker = 'rank: int = 16'
+              if marker not in source:
+                  raise SystemExit('readout rank marker missing')
+              positive = source.replace(marker, f'rank: int = {rank}', 1)
+              Path(f'probe-rank-{rank}.py').write_text(positive, encoding='utf-8')
+
+              y_marker = '    y = np.asarray(labels, np.int64)\n    g = np.asarray(trial_groups, np.int64)'
+              if y_marker not in positive:
+                  raise SystemExit('label marker missing')
+              negative = positive.replace(
+                  y_marker,
+                  '    y = np.asarray(labels, np.int64)\n'
+                  '    y = np.random.default_rng(20260917).permutation(y)\n'
+                  '    g = np.asarray(trial_groups, np.int64)',
+                  1,
+              )
+              Path(f'probe-rank-{rank}-permuted.py').write_text(negative, encoding='utf-8')
+
+      - name: Execute bounded distinction sweep
+        shell: python
+        run: |
+          import subprocess, sys
+          for rank in (1, 2, 4, 8, 16):
+              for suffix, script in (
+                  ('positive', f'probe-rank-{rank}.py'),
+                  ('permuted', f'probe-rank-{rank}-permuted.py'),
+              ):
+                  output = f'distinction-rank-{rank}-{suffix}.json'
+                  subprocess.run([
+                      sys.executable, script,
+                      '--output', output,
+                      '--groups', '10',
+                      '--batch', '8',
+                      '--rewires', '5',
+                      '--sketch-width', '512',
+                      '--dts', '0.020',
+                  ], check=True)
+
+      - name: Summarize protected consequences
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+
+          ranks = (1, 2, 4, 8, 16)
+
+          def extract(rank, suffix):
+              data = json.loads(Path(f'distinction-rank-{rank}-{suffix}.json').read_text(encoding='utf-8'))
+              comparison = next(
+                  item for item in data['summary']['comparisons']
+                  if abs(item['dt'] - 0.020) < 1e-12 and abs(item['delay_s'] - 0.04) < 1e-12
+              )
+              real = next(row for row in data['rows'] if row['topology'] == 'real')
+              metric = real['result_by_delay']['0.04']
+              return {
+                  'rank': rank,
+                  'real_accuracy': comparison['real_accuracy'],
+                  'rewire_accuracy_mean': comparison['rewire_accuracy_mean'],
+                  'rewire_accuracy_max': comparison['rewire_accuracy_max'],
+                  'real_beats_all_rewires': comparison['real_beats_all_rewires_accuracy'],
+                  'real_prediction_sha256': metric['prediction_sha256'],
+                  'real_centroid_margin': comparison['real_centroid_margin'],
+                  'rewire_centroid_margin_mean': comparison['rewire_centroid_margin_mean'],
+              }
+
+          positive = [extract(rank, 'positive') for rank in ranks]
+          permuted = [extract(rank, 'permuted') for rank in ranks]
+          reference = next(row for row in positive if row['rank'] == 16)
+          exact_floor = next((
+              row['rank'] for row in positive
+              if row['real_prediction_sha256'] == reference['real_prediction_sha256']
+              and row['real_beats_all_rewires'] == reference['real_beats_all_rewires']
+          ), None)
+
+          receipt = {
+              'schema': 'helix-model-run-014-distinction-floor-v1',
+              'status': 'worker-observation-not-authority',
+              'question': 'How far can the normalized 40 ms MaleCNS readout be compressed before the protected finite-sample behavior changes?',
+              'protected_behavior': {
+                  'reference_rank': 16,
+                  'requirements': [
+                      'exact grouped-CV prediction vector on the real topology',
+                      'whether real topology beats every degree-preserving rewire',
+                  ],
+              },
+              'positive': positive,
+              'permuted_label_negative_control': permuted,
+              'exact_behavior_floor_rank': exact_floor,
+              'claim_boundary': 'exploratory mechanism test selected after run 014 localized a transient window; compresses only PCA readout rank; not the preregistered run 016 endpoint and not a general connectome or ontology claim',
+          }
+          Path('distinction-floor.json').write_text(json.dumps(receipt, indent=2, sort_keys=True) + '\n', encoding='utf-8')
+          print('DISTINCTION_FLOOR ' + json.dumps(receipt, sort_keys=True))
+
+      - name: Remove connectome bytes before retention
+        if: always()
+        shell: bash
+        run: rm -rf "$FLY_DATA" ~/.cache/pip
+
+      - name: Publish compact evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-014-distinction-floor-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            distinction-floor.json
+            distinction-rank-*-positive.json
+            distinction-rank-*-permuted.json
+          if-no-files-found: warn
+          retention-days: 14
