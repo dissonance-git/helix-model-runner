@@ -25,37 +25,44 @@ jobs:
         run: |
           set -euo pipefail
           curl -L --fail --retry 3 -o donor.pt 'https://huggingface.co/PollardWeights/FlyBrain-Pollard-CNSv1/resolve/main/FlyBrain-Pollard-CNSv1.pt?download=true'
-          sha256sum donor.pt
-          stat -c '%s bytes' donor.pt
       - name: Inspect structure only
         shell: python
         run: |
-          import json, traceback, torch
-          try:
-              b=torch.load('donor.pt', map_location='cpu', weights_only=False)
-              print('TYPE', type(b).__name__)
-              if isinstance(b, dict):
-                  print('TOP_KEYS', [str(x) for x in b.keys()])
-                  print('META_REPR', repr(b.get('meta',{})))
-                  for k in ('src','dst','w','sign','raw_w','body_id','body_ids','nodes'):
-                      if k not in b:
-                          continue
+          import hashlib, json, os, torch
+          def sha256(path):
+              h=hashlib.sha256()
+              with open(path,'rb') as f:
+                  for c in iter(lambda:f.read(1<<20),b''): h.update(c)
+              return h.hexdigest()
+          b=torch.load('donor.pt', map_location='cpu', weights_only=False)
+          out={'artifact_bytes':os.path.getsize('donor.pt'),'artifact_sha256':sha256('donor.pt'),'python_type':type(b).__name__}
+          if isinstance(b,dict):
+              out['top_keys']=[str(x) for x in b.keys()]
+              out['meta']={str(k): (v.item() if hasattr(v,'item') and getattr(v,'numel',lambda:2)()==1 else str(v)) for k,v in b.get('meta',{}).items()}
+              fields={}
+              for k in ('src','dst','w','sign','raw_w','body_id','body_ids','nodes'):
+                  if k in b:
                       x=b[k]
-                      print('FIELD_BEGIN', k, type(x).__name__)
-                      for attr in ('shape','dtype','numel'):
-                          try:
-                              v=getattr(x,attr)
-                              print(' ',attr, v() if callable(v) else v)
-                          except Exception as e:
-                              print(' ',attr,'ERR',repr(e))
-                      try: print(' minmax', float(x.min()), float(x.max()))
-                      except Exception as e: print(' minmax ERR',repr(e))
-                  print('MODULE_KEYS', [k for k in ('addr','addr_e','val','wgate','out','voice','temp','amix','dbeta') if k in b])
-              else:
-                  print('VALUE_REPR', repr(b)[:4000])
-          except Exception:
-              traceback.print_exc()
-          print('INSPECTION_DONE')
+                      row={'type':type(x).__name__}
+                      if hasattr(x,'shape'): row['shape']=list(x.shape)
+                      if hasattr(x,'dtype'): row['dtype']=str(x.dtype)
+                      try: row['min']=float(x.min())
+                      except Exception: pass
+                      try: row['max']=float(x.max())
+                      except Exception: pass
+                      fields[k]=row
+              out['fields']=fields
+              out['module_keys']=[k for k in ('addr','addr_e','val','wgate','out','voice','temp','amix','dbeta') if k in b]
+          open('pollard-inspection.json','w',encoding='utf-8').write(json.dumps(out,indent=2,sort_keys=True)+'\n')
+          print(json.dumps(out,sort_keys=True))
       - name: Cleanup donor bytes
         if: always()
         run: rm -f donor.pt
+      - name: Publish compact inspection only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-015-pollard-inspection-${{ github.run_id }}
+          path: pollard-inspection.json
+          if-no-files-found: error
+          retention-days: 3
