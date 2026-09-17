@@ -1,0 +1,81 @@
+name: Helix Model Run 014 - MaleCNS temporal pilot
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/run-014-connectome-pilot.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  temporal-pilot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      FLYAI_COMMIT: fcf825d1f506db698a84850b005657df6ec8df3c
+      FLY_DATA: ${{ runner.temp }}/fly-data
+      NUMBA_NUM_THREADS: '4'
+      OMP_NUM_THREADS: '4'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install exact frozen donor
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check numpy==2.1.3 scipy==1.14.1 numba==0.61.2
+          python -m pip install --disable-pip-version-check --no-deps "git+https://github.com/alextitonis/fly.ai.git@${FLYAI_COMMIT}"
+
+      - name: Freeze worker identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, pathlib, sys
+          p=pathlib.Path('connectome_temporal_probe.py')
+          print('probe_sha256', hashlib.sha256(p.read_bytes()).hexdigest(), 'bytes', p.stat().st_size)
+          print('python', sys.version)
+          PY
+          python -m py_compile connectome_temporal_probe.py
+
+      - name: Execute bounded topology-timescale pilot
+        shell: bash
+        run: |
+          set -euo pipefail
+          python connectome_temporal_probe.py \
+            --output connectome-temporal-pilot.json \
+            --groups 2 \
+            --batch 4 \
+            --rewires 1 \
+            --sketch-width 256 \
+            --dts 0.020 0.002
+
+      - name: Emit compact pilot summary
+        shell: python
+        run: |
+          import json
+          d=json.load(open('connectome-temporal-pilot.json',encoding='utf-8'))
+          print('RUN014_PILOT '+json.dumps({
+              'primary':d['summary']['primary'],
+              'rows':[{'dt':r['dt'],'topology':r['topology'],'wall_s':r['wall_s'],'rate':r['mean_neuron_firing_hz']} for r in d['rows']],
+          },sort_keys=True))
+
+      - name: Remove connectome bytes before retention
+        if: always()
+        shell: bash
+        run: rm -rf "$FLY_DATA" ~/.cache/pip
+
+      - name: Publish compact evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-014-connectome-pilot-${{ github.run_id }}-${{ github.run_attempt }}
+          path: connectome-temporal-pilot.json
+          if-no-files-found: error
+          retention-days: 14
