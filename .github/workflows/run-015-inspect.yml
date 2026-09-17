@@ -1,0 +1,47 @@
+name: Helix Model Run 015 - inspect Pollard FlyBrain
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/run-015-inspect.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install torch
+        run: python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
+      - name: Fetch exact donor artifact in ephemeral VM
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -L --fail --retry 3 -o donor.pt 'https://huggingface.co/PollardWeights/FlyBrain-Pollard-CNSv1/resolve/main/FlyBrain-Pollard-CNSv1.pt?download=true'
+          sha256sum donor.pt
+          stat -c '%s bytes' donor.pt
+      - name: Inspect structure only
+        shell: python
+        run: |
+          import json, torch
+          b=torch.load('donor.pt', map_location='cpu', weights_only=False)
+          print('TOP_KEYS', sorted(b.keys()))
+          print('META', json.dumps(b.get('meta',{}), sort_keys=True, default=str))
+          for k in ('src','dst','w','sign','raw_w','body_id','nodes'):
+              if k in b:
+                  x=b[k]
+                  try:
+                      print('FIELD',k,'shape',tuple(x.shape),'dtype',getattr(x,'dtype',None),'min',float(x.min()),'max',float(x.max()))
+                  except Exception:
+                      print('FIELD',k,type(x).__name__)
+          print('MODULE_KEYS', [k for k in ('addr','addr_e','val','wgate','out','voice','temp','amix','dbeta') if k in b])
+      - name: Cleanup donor bytes
+        if: always()
+        run: rm -f donor.pt
