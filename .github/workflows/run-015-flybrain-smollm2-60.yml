@@ -1,0 +1,93 @@
+name: Helix Model Run 015 - FlyBrain SmolLM2 60-step curve
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/run-015-flybrain-smollm2-60.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  smollm2-retarget-60:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      POLLARD_COMMIT: aae2ded02a35cd1c5dd83ab7ce5273e551474b85
+      MODEL_REVISION: f8027fd0eaeea54caa13c31d31b9fdc459c38b49
+      MODEL_SHA256: 7aaff6661428bed033abba9522bec81938678642cca3181fe752b6ca9e1e540f
+      MODEL_BYTES: '723674912'
+      HF_HUB_DISABLE_XET: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      OMP_NUM_THREADS: '4'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.12'}
+      - name: Install pinned stack
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
+          python -m pip install --disable-pip-version-check "pollard-weights[flybrain] @ git+https://github.com/WestWaters/pollard-weights.git@${POLLARD_COMMIT}" huggingface-hub==0.34.4 pyarrow==18.1.0
+      - name: Fetch exact cloud specimens
+        shell: python
+        run: |
+          from huggingface_hub import hf_hub_download,snapshot_download
+          import shutil
+          shutil.copyfile(hf_hub_download(repo_id='PollardWeights/FlyBrain-Pollard-CNSv1',filename='FlyBrain-Pollard-CNSv1.pt'),'source-brain.pt')
+          snapshot_download(repo_id='HuggingFaceTB/SmolLM2-360M',revision='${{ env.MODEL_REVISION }}',local_dir='model-src',allow_patterns=['*.json','*.model','*.txt','model.safetensors'])
+      - name: Verify model and re-enter donor graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(stat -c '%s' model-src/model.safetensors)" = "$MODEL_BYTES"
+          printf '%s  %s\n' "$MODEL_SHA256" model-src/model.safetensors | sha256sum --check --strict
+          python - <<'PY'
+          import numpy as np,pandas as pd,torch,pathlib
+          ck=torch.load('source-brain.pt',map_location='cpu',weights_only=False)
+          pd.DataFrame({'body_pre':np.asarray(ck['src'],dtype=np.int64),'body_post':np.asarray(ck['dst'],dtype=np.int64),'weight':np.expm1(np.asarray(ck['w'],dtype=np.float64)).astype(np.float32)}).to_feather('brain-graph.feather')
+          np.save('brain-signs.npy',np.asarray(ck['sign'],dtype=np.float32))
+          sentence='Evidence remains useful when identity, provenance, correction, and a route back to the observation are preserved. A strong experiment changes one thing, keeps matched controls, and retains negative results. '
+          pathlib.Path('filler.txt').write_text(sentence*1800,encoding='utf-8')
+          PY
+      - name: Bound evaluation cost without changing training math
+        shell: python
+        run: |
+          import pathlib,pollard_flybrain
+          p=pathlib.Path(pollard_flybrain.__file__); t=p.read_text(encoding='utf-8')
+          for old,new in [('def evaluate(n=96):','def evaluate(n=8):'),('if it % max(1, steps // 9) == 0:','if it == steps:')]:
+              if old not in t: raise SystemExit('Pollard source drift: '+old)
+              t=t.replace(old,new,1)
+          p.write_text(t,encoding='utf-8')
+      - name: Train 60 steps
+        run: |
+          set -euo pipefail
+          pollard-flybrain --train 60 --continue-from source-brain.pt --model model-src --connectome brain-graph.feather --signs brain-signs.npy --probes filler.txt --brain brain-60.pt --device cpu | tee train-60.log
+      - name: Verify fresh recall
+        run: |
+          set -euo pipefail
+          pollard-brainverify --brain brain-60.pt --model model-src --filler filler.txt --samples 16 --seed 15060 --device cpu | tee verify-60.log
+      - name: Compact receipt
+        if: always()
+        shell: python
+        run: |
+          import json,pathlib,re
+          v=pathlib.Path('verify-60.log').read_text(encoding='utf-8',errors='replace') if pathlib.Path('verify-60.log').exists() else ''
+          def pct(label):
+              m=re.search(rf'{label}.*?([0-9]+(?:\.[0-9]+)?)%',v); return float(m.group(1)) if m else None
+          json.dump({'schema':'helix-model-run-015-retarget-curve-v1','steps':60,'recall_percent':pct('RECALL'),'floor_percent':pct('FLOOR'),'controls_percent':[float(x) for x in re.findall(r'CONTROL.*?([0-9]+(?:\.[0-9]+)?)%',v)],'controls_clean':'controls clean:' in v,'claim_boundary':'learning-curve checkpoint only'},open('curve-60.json','w'),indent=2,sort_keys=True)
+      - name: Delete heavy bytes
+        if: always()
+        run: rm -rf model-src source-brain.pt brain-60.pt brain-graph.feather brain-signs.npy ~/.cache/huggingface ~/.cache/pip
+      - name: Retain compact evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-015-retarget-curve-60-${{ github.run_id }}
+          path: |
+            curve-60.json
+            train-60.log
+            verify-60.log
+          if-no-files-found: warn
+          retention-days: 7
