@@ -1,0 +1,19 @@
+{
+  "claim_boundary": "fresh functional packet for a post-hoc stage-1-generated hypothesis; not a benchmark of general model quality",
+  "prompts": [
+    "The quickest way to determine whether an experimental result is real is to",
+    "In a directed network, removing a bridge can change",
+    "A small language model can be useful for research because",
+    "If every square is a rectangle and this object is a square, then",
+    "def fibonacci(n):\n    if n < 2:\n        return n\n    return",
+    "La diferencia entre memoria persistente y estado transitorio es",
+    "A sequence begins 1, 3, 5, 7. A cautious scientific conclusion is",
+    "The experiment failed to beat its control. The next step should be",
+    "Evidence should outrank a coherent story when",
+    "A sparse representation is useful when it preserves",
+    "The same model can behave differently after a small weight change because",
+    "To test whether a pattern is special rather than merely structured, compare it with"
+  ],
+  "schema_version": "helix-model-run-013-stage-2-prompts-001.0",
+  "selection": "authored and frozen after stage-1 weight-only results, before any stage-2 forward-pass result"
+}
