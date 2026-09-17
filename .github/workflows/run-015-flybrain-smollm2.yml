@@ -56,7 +56,7 @@ jobs:
           test "$(stat -c '%s' model-src/model.safetensors)" = "$MODEL_BYTES"
           printf '%s  %s\n' "$MODEL_SHA256" model-src/model.safetensors | sha256sum --check --strict
 
-      - name: Reconstruct the donor graph from the published checkpoint
+      - name: Re-enter the donor graph from the published checkpoint
         shell: python
         run: |
           import hashlib,json,pathlib
@@ -64,12 +64,16 @@ jobs:
           ck=torch.load('source-brain.pt',map_location='cpu',weights_only=False)
           src=np.asarray(ck['src'],dtype=np.int64)
           dst=np.asarray(ck['dst'],dtype=np.int64)
-          scaled=np.asarray(ck['w'],dtype=np.float64)
-          radius=float(ck['meta']['radius'])
-          raw=np.expm1(scaled * radius / 0.95).astype(np.float32)
+          stored=np.asarray(ck['w'],dtype=np.float64)
+          # The published checkpoint predates meta.radius. The current trainer starts with
+          # log1p(raw_weight), then spectrally normalizes that vector. Supplying expm1(stored)
+          # therefore reconstructs the checkpoint's stored normalized edge vector exactly at
+          # the log-weight boundary, after which the trainer deterministically renormalizes it.
+          raw=np.expm1(stored).astype(np.float32)
           pd.DataFrame({'body_pre':src,'body_post':dst,'weight':raw}).to_feather('brain-graph.feather')
           np.save('brain-signs.npy',np.asarray(ck['sign'],dtype=np.float32))
           source=pathlib.Path('source-brain.pt')
+          meta={k:v for k,v in ck.get('meta',{}).items() if isinstance(v,(str,int,float,bool)) or v is None}
           json.dump({
             'source_brain_sha256':hashlib.sha256(source.read_bytes()).hexdigest(),
             'source_brain_bytes':source.stat().st_size,
@@ -77,8 +81,8 @@ jobs:
             'synapses':int(ck['meta']['synapses']),
             'source_hidden':int(ck['meta']['hidden']),
             'source_best_exact':float(ck['meta'].get('exact',-1)),
-            'radius':radius,
-            'reconstruction':'raw_weight = expm1(stored_scaled_weight * stored_radius / 0.95)',
+            'source_meta':meta,
+            'reentry':'synthetic raw_weight = expm1(stored_normalized_weight); pinned trainer log1p recovers stored vector exactly before deterministic spectral renormalization',
           },open('source-brain-identity.json','w'),indent=2,sort_keys=True)
           print(json.dumps(json.load(open('source-brain-identity.json')),sort_keys=True))
 
@@ -94,13 +98,13 @@ jobs:
           mod=pathlib.Path(pollard_flybrain.__file__)
           text=mod.read_text(encoding='utf-8')
           old='if it % max(1, steps // 9) == 0:'
-          new='if it == steps - 1:'
+          new='if it == steps:'
           if old not in text:
               raise SystemExit('pinned Pollard training-loop fragment changed; refusing silent drift')
           text=text.replace(old,new,1)
           mod.write_text(text,encoding='utf-8')
           print('effective_pollard_flybrain_sha256',hashlib.sha256(mod.read_bytes()).hexdigest())
-          print('training_patch','intermediate evaluations disabled; optimizer/training step unchanged; final 120-word evaluation retained')
+          print('training_patch','intermediate evaluations disabled; optimizer/training steps unchanged; final evaluation retained')
 
       - name: Retarget published FlyBrain to SmolLM2 for 36 steps
         shell: bash
@@ -155,7 +159,7 @@ jobs:
             'controls_percent':[float(x) for x in controls],
             'controls_clean':('controls clean:' in verify),
             'train_tail':train.splitlines()[-12:],
-            'claim_boundary':'bounded retarget pilot on one frozen SmolLM2 specimen; intermediate evaluation suppression changes measurement frequency only; no promotion or general connectome advantage claim',
+            'claim_boundary':'bounded retarget pilot on one frozen SmolLM2 specimen; only intermediate evaluation frequency was changed; no promotion or general connectome advantage claim',
           }
           pathlib.Path('run-015-smollm2.json').write_text(json.dumps(receipt,indent=2,sort_keys=True)+'\n',encoding='utf-8')
           print('RUN015_SMOLLM2',json.dumps(receipt,sort_keys=True))
