@@ -1,0 +1,23 @@
+{
+  "schema_version": "helix-model-run-013-stage-3-prompts-001.0",
+  "selection": "authored and frozen after stage-2 result, before stage-3 execution; no prompt repeats stage 2",
+  "claim_boundary": "fresh robustness packet for preservation metrics, not a benchmark of general model quality",
+  "prompts": [
+    "A reliable map is useful only if it preserves",
+    "When two explanations fit the same observation, a useful next experiment is",
+    "The inverse of a reversible transformation should",
+    "A compiler can optimize a program without changing",
+    "In Python, a dictionary is most useful when",
+    "def is_even(n):\n    return",
+    "Three boxes contain 2, 4, and 8 objects. Together they contain",
+    "If an alarm is noisy but sensitive, reducing false positives may require",
+    "Un registro reproducible de un experimento debe incluir",
+    "La ruta más corta no siempre es la mejor cuando",
+    "A memory system that forgets gradually can still preserve",
+    "If a graph has several communities, information crossing between them may",
+    "The phrase 'correlation is not causation' warns that",
+    "A good counterexample is valuable because it",
+    "When a model changes one answer after a tiny perturbation, the important question is",
+    "A system can remain stable while adapting if"
+  ]
+}
