@@ -1,0 +1,117 @@
+name: Helix Model Run 023 - lm-eval sanity suite
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/run-023-lm-eval-sanity.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  lm-eval-sanity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      MODEL_REVISION: f8027fd0eaeea54caa13c31d31b9fdc459c38b49
+      MODEL_SHA256: 7aaff6661428bed033abba9522bec81938678642cca3181fe752b6ca9e1e540f
+      MODEL_BYTES: '723674912'
+      HF_HUB_DISABLE_XET: '1'
+      HF_DATASETS_DISABLE_PROGRESS_BARS: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      OMP_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '4'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned lm-eval stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
+          python -m pip install --disable-pip-version-check 'lm_eval[hf]==0.4.13'
+          lm-eval --version || true
+          python - <<'PY'
+          import importlib.metadata, json, platform, torch, transformers
+          print(json.dumps({
+              "python": platform.python_version(),
+              "torch": torch.__version__,
+              "transformers": transformers.__version__,
+              "lm_eval": importlib.metadata.version("lm_eval"),
+          }, sort_keys=True))
+          PY
+
+      - name: Fetch exact frozen base actor
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          import os
+          snapshot_download(
+              repo_id='HuggingFaceTB/SmolLM2-360M',
+              revision=os.environ['MODEL_REVISION'],
+              local_dir='model-src',
+              allow_patterns=['*.json','*.model','*.txt','model.safetensors'],
+          )
+          PY
+          test "$(stat -c '%s' model-src/model.safetensors)" = "$MODEL_BYTES"
+          printf '%s  %s\n' "$MODEL_SHA256" model-src/model.safetensors | sha256sum --check --strict
+
+      - name: Validate donor tasks
+        shell: bash
+        run: |
+          set -euo pipefail
+          lm-eval validate --tasks hellaswag,piqa,arc_easy,arc_challenge
+
+      - name: Execute standard zero-shot calibration
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p standard-eval
+          lm-eval run             --model hf             --model_args pretrained=model-src,dtype=float32             --tasks hellaswag,piqa,arc_easy,arc_challenge             --num_fewshot 0             --device cpu             --batch_size 8             --limit 50             --seed 20260917             --output_path standard-eval | tee standard-eval.log
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          files=sorted(Path("standard-eval").rglob("*.json"))
+          if not files:
+              raise SystemExit("lm-eval produced no JSON result")
+          source=files[-1]
+          data=json.loads(source.read_text())
+          summary={
+              "source_file": str(source),
+              "results": data.get("results", {}),
+              "versions": data.get("versions", {}),
+              "n-shot": data.get("n-shot", {}),
+              "higher_is_better": data.get("higher_is_better", {}),
+              "config": data.get("config", {}),
+              "sample_limit_per_task": 50,
+              "claim_boundary": "Public standard-benchmark sanity calibration on limited samples; not a protected promotion suite."
+          }
+          Path("standard-summary.json").write_text(json.dumps(summary,indent=2,sort_keys=True)+"\n")
+          print(json.dumps(summary,indent=2,sort_keys=True))
+          PY
+          sha256sum standard-summary.json
+          stat -c 'summary_bytes=%s' standard-summary.json
+
+      - name: Remove downloaded model and dataset caches
+        if: always()
+        shell: bash
+        run: rm -rf model-src ~/.cache/huggingface ~/.cache/pip ~/.cache/lm_eval
+
+      - name: Publish compact evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-023-lm-eval-sanity-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            standard-summary.json
+            standard-eval.log
+          if-no-files-found: warn
+          retention-days: 14
