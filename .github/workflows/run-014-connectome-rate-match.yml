@@ -1,0 +1,97 @@
+name: Helix Model Run 014 - firing-rate matched null
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/run-014-connectome-rate-match.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  rate-matched-null:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FLYAI_COMMIT: fcf825d1f506db698a84850b005657df6ec8df3c
+      FLY_DATA: /tmp/helix-fly-data
+      NUMBA_NUM_THREADS: '4'
+      OMP_NUM_THREADS: '4'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install exact frozen donor
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check numpy==2.1.3 scipy==1.14.1 numba==0.61.2
+          python -m pip install --disable-pip-version-check --no-deps "git+https://github.com/alextitonis/fly.ai.git@${FLYAI_COMMIT}"
+
+      - name: Build matched normalized 40ms worker
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('connectome_temporal_probe.py')
+          text=p.read_text(encoding='utf-8')
+          replacements={
+            'PROBE_DELAYS_S = (0.0, 0.04, 0.10, 0.20)':
+              'PROBE_DELAYS_S = (0.0, 0.04)',
+            'rng = np.random.default_rng(base_seed + int(round(dt * 1e6)) + (rewire_seed or 0))':
+              'rng = np.random.default_rng(base_seed + int(round(dt * 1e6)))',
+            'X = np.asarray(by_delay[delay], np.float32)\n        if len(X) != len(y):':
+              'X = np.asarray(by_delay[delay], np.float32)\n        X = X / (np.linalg.norm(X, axis=1, keepdims=True) + 1e-6)\n        if len(X) != len(y):',
+            '"readout": "fixed signed-hash internal-spike sketch + fixed PCA16/ridge(lambda=1)",':
+              '"readout": "per-sample L2-normalized signed-hash internal-spike sketch + fixed PCA16/ridge(lambda=1)",',
+          }
+          for old,new in replacements.items():
+              if old not in text:
+                  raise SystemExit(f'expected source fragment not found; refusing silent drift: {old[:80]}')
+              text=text.replace(old,new)
+          p.write_text(text,encoding='utf-8')
+
+      - name: Freeze effective worker identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum connectome_temporal_probe.py connectome_rate_match_probe.py
+          python -m py_compile connectome_temporal_probe.py connectome_rate_match_probe.py
+
+      - name: Execute held-out firing-rate match
+        shell: bash
+        run: |
+          set -euo pipefail
+          python connectome_rate_match_probe.py \
+            --output connectome-rate-match.json \
+            --groups 10 \
+            --batch 8 \
+            --rewires 5 \
+            --sketch-width 512
+
+      - name: Emit compact summary
+        shell: python
+        run: |
+          import json
+          d=json.load(open('connectome-rate-match.json',encoding='utf-8'))
+          print('RUN014_RATE_MATCH '+json.dumps({
+              'target_calibration_rate':d['target_calibration_rate'],
+              'selected_gains':d['selected_gains'],
+              'primary':d['primary'],
+          },sort_keys=True))
+
+      - name: Remove connectome bytes before retention
+        if: always()
+        shell: bash
+        run: rm -rf "$FLY_DATA" ~/.cache/pip
+
+      - name: Publish compact evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-014-connectome-rate-match-${{ github.run_id }}-${{ github.run_attempt }}
+          path: connectome-rate-match.json
+          if-no-files-found: error
+          retention-days: 14
