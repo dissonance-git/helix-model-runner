@@ -1,0 +1,121 @@
+name: Helix Model Run 013 - exact weight structure
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/run-013.yml'
+      - 'probe.py'
+
+permissions:
+  contents: read
+
+jobs:
+  exact-weight-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      MODEL_URL: https://huggingface.co/HuggingFaceTB/SmolLM2-360M/resolve/f8027fd0eaeea54caa13c31d31b9fdc459c38b49/model.safetensors?download=true
+      MODEL_SHA256: 7aaff6661428bed033abba9522bec81938678642cca3181fe752b6ca9e1e540f
+      MODEL_BYTES: '723674912'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install bounded dependency
+        run: python -m pip install --disable-pip-version-check numpy==2.1.3
+
+      - name: Self-test probe before model acquisition
+        run: python probe.py --self-test
+
+      - name: Fetch exact pinned source on ephemeral runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 5 --retry-all-errors --output model.safetensors "$MODEL_URL"
+          actual_bytes=$(stat -c '%s' model.safetensors)
+          test "$actual_bytes" = "$MODEL_BYTES"
+          printf '%s  %s\n' "$MODEL_SHA256" model.safetensors | sha256sum --check --strict
+          echo "MODEL_IDENTITY_OK bytes=$actual_bytes sha256=$MODEL_SHA256"
+
+      - name: Confirm preregistered tensors exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          python probe.py --model-file model.safetensors --list-tensors > tensors.txt
+          for name in \
+            model.layers.0.mlp.down_proj.weight \
+            model.layers.15.mlp.down_proj.weight \
+            model.layers.31.mlp.down_proj.weight \
+            model.layers.0.self_attn.o_proj.weight \
+            model.layers.15.self_attn.o_proj.weight \
+            model.layers.31.self_attn.o_proj.weight
+          do
+            grep -Fx "$name" tensors.txt >/dev/null
+          done
+          echo "TENSOR_SCOPE_OK"
+
+      - name: Execute preregistered exact-weight discriminator
+        run: |
+          python probe.py \
+            --model-file model.safetensors \
+            --expected-sha256 "$MODEL_SHA256" \
+            --tensor model.layers.0.mlp.down_proj.weight \
+            --tensor model.layers.15.mlp.down_proj.weight \
+            --tensor model.layers.31.mlp.down_proj.weight \
+            --tensor model.layers.0.self_attn.o_proj.weight \
+            --tensor model.layers.15.self_attn.o_proj.weight \
+            --tensor model.layers.31.self_attn.o_proj.weight \
+            --rank 16 --rank 32 \
+            --budget 0.005 --budget 0.01 --budget 0.02 \
+            --random-replicates 20 \
+            --seed 13013 \
+            --output receipt.json
+
+      - name: Emit compact result summary
+        shell: python
+        run: |
+          import json
+          from collections import defaultdict
+          d=json.load(open('receipt.json',encoding='utf-8'))
+          groups=defaultdict(dict)
+          for row in d['results']:
+              if row['residual_fraction']==0:
+                  continue
+              key=(row['tensor'],row['rank'],row['residual_fraction'])
+              if row['arm']=='random-residual':
+                  groups[key]['random-residual']=row['summary']['relative_frobenius_error']['mean']
+              else:
+                  groups[key][row['arm']]=row['metrics']['relative_frobenius_error']
+          wins=defaultdict(int)
+          print('RUN013_COMPACT_BEGIN')
+          for key,arms in sorted(groups.items()):
+              winner=min(arms,key=arms.get)
+              wins[winner]+=1
+              print(json.dumps({'tensor':key[0],'rank':key[1],'budget':key[2],'winner':winner,'relative_frobenius_error':arms[winner],'arms':arms},sort_keys=True))
+          print('RUN013_WIN_COUNTS '+json.dumps(dict(wins),sort_keys=True))
+          print('RUN013_WALL_SECONDS '+str(d['wall_seconds']))
+          print('RUN013_COMPACT_END')
+          with open('summary.md','w',encoding='utf-8') as f:
+              f.write('# Run 013 stage 1\n\n')
+              f.write('Source SHA-256: `'+d['source']['sha256']+'`\n\n')
+              f.write('Winning arm counts by matched tensor/rank/budget cell: `'+json.dumps(dict(wins),sort_keys=True)+'`\n\n')
+              f.write('This is weight-reconstruction evidence only. Functional inference was not run.\n')
+
+      - name: Remove model bytes before retaining outputs
+        if: always()
+        run: rm -f model.safetensors tensors.txt
+
+      - name: Publish compact receipt only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-013-stage-1-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            receipt.json
+            summary.md
+          if-no-files-found: error
+          retention-days: 14
