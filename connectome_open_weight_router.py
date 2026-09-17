@@ -114,8 +114,9 @@ def final_logits(model, batch):
 def per_sample_metrics(base, cand):
     bl = F.log_softmax(base, dim=-1); cl = F.log_softmax(cand, dim=-1); bp = bl.exp()
     kl = torch.sum(bp * (bl - cl), dim=-1); mse = torch.mean((base - cand) ** 2, dim=-1)
-    bt = torch.topk(base, 10, dim=-1).indices; ct = torch.topk(cand, 10, dim=-1).indices
-    overlap = (bt.unsqueeze(-1) == ct.unsqueeze(-2)).any(dim=-1).float().sum(dim=-1) / 10.0
+    k = min(10, int(base.shape[-1]), int(cand.shape[-1]))
+    bt = torch.topk(base, k, dim=-1).indices; ct = torch.topk(cand, k, dim=-1).indices
+    overlap = (bt.unsqueeze(-1) == ct.unsqueeze(-2)).any(dim=-1).float().sum(dim=-1) / float(k)
     return {"kl": kl.numpy(), "mse": mse.numpy(), "top10": overlap.numpy()}
 
 def repair_bank(original, low_rank, token_inputs, token_family):
