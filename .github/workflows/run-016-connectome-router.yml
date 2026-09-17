@@ -1,0 +1,123 @@
+name: Helix Model Run 016 - connectome open-weight router
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/run-016-connectome-router.yml'
+      - 'connectome_open_weight_router.py'
+
+permissions:
+  contents: read
+
+jobs:
+  connectome-router:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      MODEL_REVISION: f8027fd0eaeea54caa13c31d31b9fdc459c38b49
+      MODEL_SHA256: 7aaff6661428bed033abba9522bec81938678642cca3181fe752b6ca9e1e540f
+      MODEL_BYTES: '723674912'
+      FLYAI_COMMIT: fcf825d1f506db698a84850b005657df6ec8df3c
+      MALECNS_COMMIT: 67767d2233657983993ff6c2be48e836a935863c
+      COMMUNITY_SHA256: eb583a8520bfb1f4b4fb30e3a8590cdb7e72caa599b888adce583d6de24d04a1
+      FLY_DATA: /tmp/helix-fly-data
+      MALECNS_COMMUNITIES: /tmp/mcns_lvl_6_hsbm_communities.feather
+      HF_HUB_DISABLE_XET: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      NUMBA_NUM_THREADS: '4'
+      OMP_NUM_THREADS: '4'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned CPU research stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
+          python -m pip install --disable-pip-version-check numpy==2.1.3 scipy==1.14.1 numba==0.61.2 pandas==2.2.3 pyarrow==17.0.0 transformers==4.56.2 safetensors==0.6.2 huggingface-hub==0.34.4 accelerate==1.10.1
+          python -m pip install --disable-pip-version-check --no-deps "git+https://github.com/alextitonis/fly.ai.git@${FLYAI_COMMIT}"
+
+      - name: Verify worker before heavyweight acquisition
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile connectome_open_weight_router.py connectome_temporal_probe.py connectome_hierarchy_probe.py probe.py
+          python connectome_open_weight_router.py --self-test
+          sha256sum connectome_open_weight_router.py connectome_temporal_probe.py connectome_hierarchy_probe.py probe.py
+
+      - name: Fetch exact frozen model and MaleCNS community null
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          import os
+          snapshot_download(
+              repo_id='HuggingFaceTB/SmolLM2-360M',
+              revision=os.environ['MODEL_REVISION'],
+              local_dir='model-src',
+              allow_patterns=['*.json','*.model','*.txt','model.safetensors'],
+          )
+          PY
+          test "$(stat -c '%s' model-src/model.safetensors)" = "$MODEL_BYTES"
+          printf '%s  %s\n' "$MODEL_SHA256" model-src/model.safetensors | sha256sum --check --strict
+          curl --fail --location --silent --show-error \
+            "https://raw.githubusercontent.com/flyconnectome/2025malecns/${MALECNS_COMMIT}/supplemental_data/mcns_lvl_6_hsbm_communities.feather" \
+            --output "$MALECNS_COMMUNITIES"
+          printf '%s  %s\n' "$COMMUNITY_SHA256" "$MALECNS_COMMUNITIES" | sha256sum --check --strict
+
+      - name: Materialize and bind exact MaleCNS bytes
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          from flybrain import FlyBrain
+          from connectome_temporal_probe import BRAIN_SHA256, WEIGHTS_SHA256, sha256
+          FlyBrain(device='cpu', batch=1, seed=16016, dt=0.020, sensory_input=False)
+          root=Path(os.environ['FLY_DATA'])
+          assert sha256(root/'brain.npz') == BRAIN_SHA256
+          assert sha256(root/'weights.npz') == WEIGHTS_SHA256
+          print('MALECNS_IDENTITY_OK', (root/'brain.npz').stat().st_size, (root/'weights.npz').stat().st_size)
+
+      - name: Execute preregistered router with secondary distinction diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          python connectome_open_weight_router.py \
+            --model-dir model-src \
+            --model-file model-src/model.safetensors \
+            --expected-sha256 "$MODEL_SHA256" \
+            --output run-016-router.json | tee run-016.log
+
+      - name: Emit compact decision surface
+        shell: python
+        run: |
+          import json
+          d=json.load(open('run-016-router.json',encoding='utf-8'))
+          print('RUN016_DECISION '+json.dumps(d['decision'],sort_keys=True))
+          print('RUN016_REAL '+json.dumps(d['arms']['real-malecns-router'],sort_keys=True))
+          print('RUN016_DIRECT '+json.dumps(d['arms']['direct-linear-router-on-model-representation'],sort_keys=True))
+          print('RUN016_ORACLE '+json.dumps(d['arms']['oracle-repair-router'],sort_keys=True))
+          print('RUN016_DISTINCTION '+json.dumps(d['secondary_distinction_diagnostic'],sort_keys=True))
+
+      - name: Remove all heavyweight bytes before retention
+        if: always()
+        shell: bash
+        run: rm -rf model-src "$FLY_DATA" "$MALECNS_COMMUNITIES" ~/.cache/huggingface ~/.cache/pip
+
+      - name: Publish compact evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-016-connectome-router-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            run-016-router.json
+            run-016.log
+          if-no-files-found: warn
+          retention-days: 14
