@@ -40,7 +40,7 @@ jobs:
           source = Path('connectome_temporal_probe.py').read_text(encoding='utf-8')
           replacements = {
               'PROBE_DELAYS_S = (0.0, 0.04, 0.10, 0.20)':
-                  'PROBE_DELAYS_S = (0.04,)',
+                  'PROBE_DELAYS_S = (0.0, 0.04)',
               'rng = np.random.default_rng(base_seed + int(round(dt * 1e6)) + (rewire_seed or 0))':
                   'rng = np.random.default_rng(base_seed + int(round(dt * 1e6)))',
               'X = np.asarray(by_delay[delay], np.float32)\n        if len(X) != len(y):':
