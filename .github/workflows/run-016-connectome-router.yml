@@ -73,8 +73,10 @@ jobs:
           printf '%s  %s\n' "$COMMUNITY_SHA256" "$MALECNS_COMMUNITIES" | sha256sum --check --strict
 
       - name: Materialize and bind exact MaleCNS bytes
-        shell: python
+        shell: bash
         run: |
+          set -euo pipefail
+          python - <<'PY'
           import os
           from pathlib import Path
           from flybrain import FlyBrain
@@ -84,6 +86,7 @@ jobs:
           assert sha256(root/'brain.npz') == BRAIN_SHA256
           assert sha256(root/'weights.npz') == WEIGHTS_SHA256
           print('MALECNS_IDENTITY_OK', (root/'brain.npz').stat().st_size, (root/'weights.npz').stat().st_size)
+          PY
 
       - name: Execute preregistered router with secondary distinction diagnostic
         shell: bash
