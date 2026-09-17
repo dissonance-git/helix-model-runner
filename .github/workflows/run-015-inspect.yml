@@ -30,18 +30,32 @@ jobs:
       - name: Inspect structure only
         shell: python
         run: |
-          import json, torch
-          b=torch.load('donor.pt', map_location='cpu', weights_only=False)
-          print('TOP_KEYS', sorted(b.keys()))
-          print('META', json.dumps(b.get('meta',{}), sort_keys=True, default=str))
-          for k in ('src','dst','w','sign','raw_w','body_id','nodes'):
-              if k in b:
-                  x=b[k]
-                  try:
-                      print('FIELD',k,'shape',tuple(x.shape),'dtype',getattr(x,'dtype',None),'min',float(x.min()),'max',float(x.max()))
-                  except Exception:
-                      print('FIELD',k,type(x).__name__)
-          print('MODULE_KEYS', [k for k in ('addr','addr_e','val','wgate','out','voice','temp','amix','dbeta') if k in b])
+          import json, traceback, torch
+          try:
+              b=torch.load('donor.pt', map_location='cpu', weights_only=False)
+              print('TYPE', type(b).__name__)
+              if isinstance(b, dict):
+                  print('TOP_KEYS', [str(x) for x in b.keys()])
+                  print('META_REPR', repr(b.get('meta',{})))
+                  for k in ('src','dst','w','sign','raw_w','body_id','body_ids','nodes'):
+                      if k not in b:
+                          continue
+                      x=b[k]
+                      print('FIELD_BEGIN', k, type(x).__name__)
+                      for attr in ('shape','dtype','numel'):
+                          try:
+                              v=getattr(x,attr)
+                              print(' ',attr, v() if callable(v) else v)
+                          except Exception as e:
+                              print(' ',attr,'ERR',repr(e))
+                      try: print(' minmax', float(x.min()), float(x.max()))
+                      except Exception as e: print(' minmax ERR',repr(e))
+                  print('MODULE_KEYS', [k for k in ('addr','addr_e','val','wgate','out','voice','temp','amix','dbeta') if k in b])
+              else:
+                  print('VALUE_REPR', repr(b)[:4000])
+          except Exception:
+              traceback.print_exc()
+          print('INSPECTION_DONE')
       - name: Cleanup donor bytes
         if: always()
         run: rm -f donor.pt
