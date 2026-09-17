@@ -1,0 +1,127 @@
+name: Helix Model Run 015 - FlyBrain SmolLM2 300-step retarget
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/run-015-flybrain-smollm2-300.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  smollm2-retarget-300:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      POLLARD_COMMIT: aae2ded02a35cd1c5dd83ab7ce5273e551474b85
+      MODEL_REVISION: f8027fd0eaeea54caa13c31d31b9fdc459c38b49
+      MODEL_SHA256: 7aaff6661428bed033abba9522bec81938678642cca3181fe752b6ca9e1e540f
+      MODEL_BYTES: '723674912'
+      HF_HUB_DISABLE_XET: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      OMP_NUM_THREADS: '4'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned CPU research stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
+          python -m pip install --disable-pip-version-check "pollard-weights[flybrain] @ git+https://github.com/WestWaters/pollard-weights.git@${POLLARD_COMMIT}" huggingface-hub==0.34.4 pyarrow==18.1.0
+
+      - name: Fetch donor brain and exact model on ephemeral runner
+        shell: python
+        run: |
+          from huggingface_hub import hf_hub_download, snapshot_download
+          import pathlib, shutil
+          b=hf_hub_download(repo_id='PollardWeights/FlyBrain-Pollard-CNSv1',filename='FlyBrain-Pollard-CNSv1.pt')
+          shutil.copyfile(b,'source-brain.pt')
+          snapshot_download(repo_id='HuggingFaceTB/SmolLM2-360M',revision='${{ env.MODEL_REVISION }}',local_dir='model-src',allow_patterns=['*.json','*.model','*.txt','model.safetensors'])
+          print('brain_bytes',pathlib.Path('source-brain.pt').stat().st_size)
+
+      - name: Verify exact SmolLM2 specimen
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(stat -c '%s' model-src/model.safetensors)" = "$MODEL_BYTES"
+          printf '%s  %s\n' "$MODEL_SHA256" model-src/model.safetensors | sha256sum --check --strict
+
+      - name: Re-enter donor graph exactly from checkpoint
+        shell: python
+        run: |
+          import hashlib,json,pathlib
+          import numpy as np, pandas as pd, torch
+          ck=torch.load('source-brain.pt',map_location='cpu',weights_only=False)
+          src=np.asarray(ck['src'],dtype=np.int64); dst=np.asarray(ck['dst'],dtype=np.int64)
+          stored=np.asarray(ck['w'],dtype=np.float64)
+          raw=np.expm1(stored).astype(np.float32)
+          pd.DataFrame({'body_pre':src,'body_post':dst,'weight':raw}).to_feather('brain-graph.feather')
+          np.save('brain-signs.npy',np.asarray(ck['sign'],dtype=np.float32))
+          p=pathlib.Path('source-brain.pt')
+          json.dump({'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'bytes':p.stat().st_size,'neurons':int(ck['meta']['neurons']),'synapses':int(ck['meta']['synapses']),'source_hidden':int(ck['meta']['hidden']),'source_step':int(ck['meta'].get('step',-1))},open('source-brain-identity.json','w'),indent=2,sort_keys=True)
+
+      - name: Freeze corpus and bounded evaluation patch
+        shell: python
+        run: |
+          import hashlib,pathlib,pollard_flybrain
+          sentence='Evidence remains useful when identity, provenance, correction, and a route back to the observation are preserved. A strong experiment changes one thing, keeps matched controls, and retains negative results. '
+          pathlib.Path('filler.txt').write_text(sentence*1800,encoding='utf-8')
+          mod=pathlib.Path(pollard_flybrain.__file__); text=mod.read_text(encoding='utf-8')
+          pairs=[('def evaluate(n=96):','def evaluate(n=16):'),('if it % max(1, steps // 9) == 0:','if it == steps:')]
+          for old,new in pairs:
+              if old not in text: raise SystemExit('pinned Pollard fragment changed: '+old)
+              text=text.replace(old,new,1)
+          mod.write_text(text,encoding='utf-8')
+          print('effective_pollard_flybrain_sha256',hashlib.sha256(mod.read_bytes()).hexdigest())
+          print('training_patch','evaluation only: n=16, final step only; optimizer/training math unchanged')
+
+      - name: Retarget FlyBrain to SmolLM2 for 300 steps
+        shell: bash
+        run: |
+          set -euo pipefail
+          pollard-flybrain --train 300 --continue-from source-brain.pt --model model-src --connectome brain-graph.feather --signs brain-signs.npy --probes filler.txt --brain smollm2-flybrain-300.pt --device cpu | tee train.log
+
+      - name: Verify on fresh unseen words
+        shell: bash
+        run: |
+          set -euo pipefail
+          pollard-brainverify --brain smollm2-flybrain-300.pt --model model-src --filler filler.txt --samples 32 --seed 15015 --device cpu | tee verify.log
+
+      - name: Emit compact receipt
+        if: always()
+        shell: python
+        run: |
+          import hashlib,json,pathlib,re
+          ident=json.load(open('source-brain-identity.json')) if pathlib.Path('source-brain-identity.json').exists() else {}
+          train=pathlib.Path('train.log').read_text(encoding='utf-8',errors='replace') if pathlib.Path('train.log').exists() else ''
+          verify=pathlib.Path('verify.log').read_text(encoding='utf-8',errors='replace') if pathlib.Path('verify.log').exists() else ''
+          def pct(label):
+              m=re.search(rf'{label}.*?([0-9]+(?:\.[0-9]+)?)%',verify); return float(m.group(1)) if m else None
+          controls=re.findall(r'CONTROL.*?([0-9]+(?:\.[0-9]+)?)%',verify)
+          out=pathlib.Path('smollm2-flybrain-300.pt')
+          receipt={'schema':'helix-model-run-015-smollm2-retarget-300-v1','status':'worker-observation-not-authority','source_brain':ident,'model_revision':'f8027fd0eaeea54caa13c31d31b9fdc459c38b49','model_sha256':'7aaff6661428bed033abba9522bec81938678642cca3181fe752b6ca9e1e540f','training_steps':300,'internal_eval_samples':16,'external_verify_samples':32,'trained_brain_sha256':hashlib.sha256(out.read_bytes()).hexdigest() if out.exists() else None,'trained_brain_bytes':out.stat().st_size if out.exists() else None,'recall_percent':pct('RECALL'),'floor_percent':pct('FLOOR'),'controls_percent':[float(x) for x in controls],'controls_clean':('controls clean:' in verify),'train_tail':train.splitlines()[-16:],'claim_boundary':'single-fact fidelity/retarget test only; topology advantage requires the separately controlled multi-fact/interference stage'}
+          pathlib.Path('run-015-smollm2-300.json').write_text(json.dumps(receipt,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          print('RUN015_SMOLLM2_300',json.dumps(receipt,sort_keys=True))
+
+      - name: Remove all model and brain bytes before retention
+        if: always()
+        shell: bash
+        run: rm -rf model-src source-brain.pt smollm2-flybrain-300.pt brain-graph.feather brain-signs.npy ~/.cache/huggingface ~/.cache/pip
+
+      - name: Publish compact evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-015-flybrain-smollm2-300-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            run-015-smollm2-300.json
+            train.log
+            verify.log
+            source-brain-identity.json
+          if-no-files-found: warn
+          retention-days: 14
