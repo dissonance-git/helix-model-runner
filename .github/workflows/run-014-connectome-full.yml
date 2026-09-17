@@ -1,0 +1,94 @@
+name: Helix Model Run 014 - MaleCNS controlled temporal grid
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/run-014-connectome-full.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  controlled-grid:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      FLYAI_COMMIT: fcf825d1f506db698a84850b005657df6ec8df3c
+      FLY_DATA: /tmp/helix-fly-data
+      NUMBA_NUM_THREADS: '4'
+      OMP_NUM_THREADS: '4'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install exact frozen donor
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check numpy==2.1.3 scipy==1.14.1 numba==0.61.2
+          python -m pip install --disable-pip-version-check --no-deps "git+https://github.com/alextitonis/fly.ai.git@${FLYAI_COMMIT}"
+
+      - name: Enforce matched label schedule across topology controls
+        shell: python
+        run: |
+          from pathlib import Path
+          p=Path('connectome_temporal_probe.py')
+          text=p.read_text(encoding='utf-8')
+          old='rng = np.random.default_rng(base_seed + int(round(dt * 1e6)) + (rewire_seed or 0))'
+          new='rng = np.random.default_rng(base_seed + int(round(dt * 1e6)))'
+          if old not in text:
+              raise SystemExit('expected pilot RNG line not found; refusing silent drift')
+          p.write_text(text.replace(old,new),encoding='utf-8')
+
+      - name: Freeze effective worker identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import hashlib, pathlib, sys
+          p=pathlib.Path('connectome_temporal_probe.py')
+          print('effective_probe_sha256', hashlib.sha256(p.read_bytes()).hexdigest(), 'bytes', p.stat().st_size)
+          print('python', sys.version)
+          PY
+          python -m py_compile connectome_temporal_probe.py
+
+      - name: Execute preregistered controlled grid
+        shell: bash
+        run: |
+          set -euo pipefail
+          python connectome_temporal_probe.py \
+            --output connectome-temporal-full.json \
+            --groups 6 \
+            --batch 8 \
+            --rewires 3 \
+            --sketch-width 512 \
+            --dts 0.020 0.005 0.002
+
+      - name: Emit compact controlled summary
+        shell: python
+        run: |
+          import json
+          d=json.load(open('connectome-temporal-full.json',encoding='utf-8'))
+          print('RUN014_FULL '+json.dumps({
+              'primary':d['summary']['primary'],
+              'comparisons':d['summary']['comparisons'],
+              'rows':[{'dt':r['dt'],'topology':r['topology'],'wall_s':r['wall_s'],'rate':r['mean_neuron_firing_hz']} for r in d['rows']],
+          },sort_keys=True))
+
+      - name: Remove connectome bytes before retention
+        if: always()
+        shell: bash
+        run: rm -rf "$FLY_DATA" ~/.cache/pip
+
+      - name: Publish compact evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-014-connectome-full-${{ github.run_id }}-${{ github.run_attempt }}
+          path: connectome-temporal-full.json
+          if-no-files-found: error
+          retention-days: 14
