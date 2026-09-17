@@ -1,0 +1,111 @@
+name: Helix Model Run 015 - Pollard FlyBrain baseline
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/run-015-flybrain-baseline.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  flybrain-baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      POLLARD_COMMIT: aae2ded02a35cd1c5dd83ab7ce5273e551474b85
+      HF_HUB_DISABLE_XET: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      OMP_NUM_THREADS: '4'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned Pollard FlyBrain stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
+          python -m pip install --disable-pip-version-check "git+https://github.com/WestWaters/pollard-weights.git@${POLLARD_COMMIT}#egg=pollard-weights[flybrain]" huggingface-hub==0.34.4
+
+      - name: Fetch published FlyBrain artifact only on ephemeral runner
+        shell: python
+        run: |
+          from huggingface_hub import hf_hub_download
+          import pathlib, shutil
+          p=hf_hub_download(repo_id='PollardWeights/FlyBrain-Pollard-CNSv1', filename='FlyBrain-Pollard-CNSv1.pt')
+          shutil.copyfile(p,'FlyBrain-Pollard-CNSv1.pt')
+          print(pathlib.Path('FlyBrain-Pollard-CNSv1.pt').stat().st_size)
+
+      - name: Freeze artifact identity and deterministic filler
+        shell: python
+        run: |
+          import hashlib, json, pathlib
+          brain=pathlib.Path('FlyBrain-Pollard-CNSv1.pt')
+          digest=hashlib.sha256(brain.read_bytes()).hexdigest()
+          sentence=(
+            'A controlled experiment preserves its inputs, records its assumptions, compares a strong control, '
+            'and changes one relevant thing at a time. Durable evidence keeps a route back to the observation. '
+          )
+          pathlib.Path('filler.txt').write_text(sentence*900,encoding='utf-8')
+          json.dump({'brain_sha256':digest,'brain_bytes':brain.stat().st_size,'pollard_commit':'aae2ded02a35cd1c5dd83ab7ce5273e551474b85'},open('identity.json','w'),indent=2,sort_keys=True)
+          print('BRAIN_SHA256',digest,'BYTES',brain.stat().st_size)
+
+      - name: Reproduce Pollard memory discriminator on published backbone
+        shell: bash
+        run: |
+          set -euo pipefail
+          pollard-brainverify \
+            --brain FlyBrain-Pollard-CNSv1.pt \
+            --model Qwen/Qwen2.5-0.5B-Instruct \
+            --filler filler.txt \
+            --samples 32 \
+            --seed 999 \
+            --device cpu | tee verify.log
+
+      - name: Emit compact receipt
+        if: always()
+        shell: python
+        run: |
+          import json,re,pathlib
+          text=pathlib.Path('verify.log').read_text(encoding='utf-8',errors='replace') if pathlib.Path('verify.log').exists() else ''
+          ident=json.load(open('identity.json')) if pathlib.Path('identity.json').exists() else {}
+          def pct(label):
+              m=re.search(rf'{label}.*?([0-9]+(?:\.[0-9]+)?)%',text)
+              return float(m.group(1)) if m else None
+          controls=re.findall(r'CONTROL.*?([0-9]+(?:\.[0-9]+)?)%',text)
+          receipt={
+            'schema':'helix-model-run-015-pollard-baseline-v1',
+            'status':'worker-observation-not-authority',
+            'pollard_commit':ident.get('pollard_commit'),
+            'brain_sha256':ident.get('brain_sha256'),
+            'brain_bytes':ident.get('brain_bytes'),
+            'backbone':'Qwen/Qwen2.5-0.5B-Instruct',
+            'samples':32,
+            'floor_percent':pct('FLOOR'),
+            'recall_percent':pct('RECALL'),
+            'controls_percent':[float(x) for x in controls],
+            'controls_clean':('controls clean:' in text),
+            'claim_boundary':'reproduction/smoke check of donor-published memory mechanism on its published backbone; not SmolLM2 evidence and not Helix claim authority',
+          }
+          pathlib.Path('run-015-baseline.json').write_text(json.dumps(receipt,indent=2,sort_keys=True)+'\n',encoding='utf-8')
+          print('RUN015_BASELINE',json.dumps(receipt,sort_keys=True))
+
+      - name: Remove all model/brain bytes before retention
+        if: always()
+        shell: bash
+        run: rm -rf FlyBrain-Pollard-CNSv1.pt ~/.cache/huggingface ~/.cache/pip
+
+      - name: Publish compact evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-015-flybrain-baseline-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            run-015-baseline.json
+            verify.log
+          if-no-files-found: warn
+          retention-days: 14
