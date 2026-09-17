@@ -29,7 +29,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
-          python -m pip install --disable-pip-version-check "git+https://github.com/WestWaters/pollard-weights.git@${POLLARD_COMMIT}#egg=pollard-weights[flybrain]" huggingface-hub==0.34.4
+          python -m pip install --disable-pip-version-check "pollard-weights[flybrain] @ git+https://github.com/WestWaters/pollard-weights.git@${POLLARD_COMMIT}" huggingface-hub==0.34.4
 
       - name: Fetch published FlyBrain artifact only on ephemeral runner
         shell: python
