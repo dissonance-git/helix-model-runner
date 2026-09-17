@@ -38,6 +38,12 @@ jobs:
             --output "$MALECNS_COMMUNITIES"
           sha256sum "$MALECNS_COMMUNITIES"
 
+      - name: Materialize exact frozen brain bytes
+        shell: python
+        run: |
+          from flybrain import FlyBrain
+          FlyBrain(device='cpu', batch=1, seed=731, dt=0.020, sensory_input=False)
+
       - name: Build matched normalized probe
         shell: python
         run: |
