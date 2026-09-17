@@ -1,0 +1,116 @@
+name: Helix Model Run 013 - functional channel preservation
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/run-013-stage2.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  functional-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      MODEL_REVISION: f8027fd0eaeea54caa13c31d31b9fdc459c38b49
+      MODEL_SHA256: 7aaff6661428bed033abba9522bec81938678642cca3181fe752b6ca9e1e540f
+      MODEL_BYTES: '723674912'
+      HF_HUB_DISABLE_XET: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install bounded inference stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
+          python -m pip install --disable-pip-version-check numpy==2.1.3 transformers==4.56.2 safetensors==0.6.2 huggingface-hub==0.34.4 accelerate==1.10.1
+
+      - name: Freeze execution identities
+        shell: bash
+        run: |
+          python - <<'PY'
+          import hashlib, pathlib
+          for path in ['probe.py','forward_probe.py','prompts-stage2.json']:
+              p=pathlib.Path(path)
+              print(path, hashlib.sha256(p.read_bytes()).hexdigest(), p.stat().st_size)
+          PY
+
+      - name: Fetch exact pinned model only on ephemeral runner
+        shell: python
+        run: |
+          from huggingface_hub import snapshot_download
+          snapshot_download(
+              repo_id='HuggingFaceTB/SmolLM2-360M',
+              revision='${{ env.MODEL_REVISION }}',
+              local_dir='model-src',
+              allow_patterns=['*.json','*.model','*.txt','model.safetensors'],
+          )
+
+      - name: Verify exact source specimen
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_bytes=$(stat -c '%s' model-src/model.safetensors)
+          test "$actual_bytes" = "$MODEL_BYTES"
+          printf '%s  %s\n' "$MODEL_SHA256" model-src/model.safetensors | sha256sum --check --strict
+          echo "MODEL_IDENTITY_OK bytes=$actual_bytes sha256=$MODEL_SHA256"
+
+      - name: Execute fresh functional discriminator
+        shell: bash
+        run: |
+          set -euo pipefail
+          python forward_probe.py \
+            --model-dir model-src \
+            --model-file model-src/model.safetensors \
+            --expected-sha256 "$MODEL_SHA256" \
+            --prompts prompts-stage2.json \
+            --output receipt-stage2.json
+
+      - name: Emit compact matched-arm summary
+        shell: python
+        run: |
+          import json
+          d=json.load(open('receipt-stage2.json',encoding='utf-8'))
+          by={}
+          for row in d['results']:
+              by.setdefault(row['tensor'],{})[row['arm']]=row['metrics']
+          print('RUN013_STAGE2_BEGIN')
+          summary=[]
+          for tensor,arms in sorted(by.items()):
+              mag=arms['magnitude-residual']; hel=arms['multiscale-coverage-residual']; uni=arms['uniform-block-coverage-residual']
+              out={
+                'tensor':tensor,
+                'logit_mse':{'magnitude':mag['logit_mse'],'helix':hel['logit_mse'],'uniform':uni['logit_mse']},
+                'kl':{'magnitude':mag['kl_baseline_to_candidate'],'helix':hel['kl_baseline_to_candidate'],'uniform':uni['kl_baseline_to_candidate']},
+                'top10_overlap':{'magnitude':mag['top10_overlap'],'helix':hel['top10_overlap'],'uniform':uni['top10_overlap']},
+                'nll_delta':{'magnitude':mag['nll_delta'],'helix':hel['nll_delta'],'uniform':uni['nll_delta']},
+                'helix_beats_magnitude_logit_mse':hel['logit_mse'] < mag['logit_mse'],
+                'helix_beats_magnitude_kl':hel['kl_baseline_to_candidate'] < mag['kl_baseline_to_candidate'],
+              }
+              summary.append(out); print(json.dumps(out,sort_keys=True))
+          print('RUN013_STAGE2_WALL_SECONDS '+str(d['wall_seconds']))
+          print('RUN013_STAGE2_END')
+          with open('summary-stage2.json','w',encoding='utf-8') as f: json.dump(summary,f,indent=2,sort_keys=True)
+
+      - name: Remove all model bytes before retention
+        if: always()
+        run: rm -rf model-src ~/.cache/huggingface
+
+      - name: Publish compact evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-013-stage-2-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            receipt-stage2.json
+            summary-stage2.json
+          if-no-files-found: error
+          retention-days: 14
