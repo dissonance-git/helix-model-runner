@@ -471,9 +471,9 @@ def self_test(seed: int = 20261019, cases_per_family: int = 4) -> dict[str, Any]
 
 def main() -> None:
     parser=argparse.ArgumentParser()
-    parser.add_argument("--model-dir",required=True)
-    parser.add_argument("--model-file",required=True)
-    parser.add_argument("--expected-sha256",required=True)
+    parser.add_argument("--model-dir")
+    parser.add_argument("--model-file")
+    parser.add_argument("--expected-sha256")
     parser.add_argument("--seeds",default="20261019,20261020,20261021")
     parser.add_argument("--cases-per-family",type=int,default=4)
     parser.add_argument("--output",default="run-039-exact-operators.json")
@@ -483,6 +483,8 @@ def main() -> None:
     if args.self_test:
         print(json.dumps(self_test(), indent=2, sort_keys=True))
         return
+    if not args.model_dir or not args.model_file or not args.expected_sha256:
+        raise SystemExit("model-dir, model-file and expected-sha256 are required")
 
     model_path=Path(args.model_file)
     observed=hashlib.sha256(model_path.read_bytes()).hexdigest()
