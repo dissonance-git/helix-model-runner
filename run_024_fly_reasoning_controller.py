@@ -432,16 +432,56 @@ def evaluate(
     }
 
 
+def self_test() -> dict[str, Any]:
+    rng = np.random.default_rng(7)
+    Xtr = rng.normal(size=(120, 29)).astype(np.float32)
+    Xte = rng.normal(size=(80, 29)).astype(np.float32)
+    ytr = (Xtr[:, 0] + 0.4 * Xtr[:, 1] > 0).astype(np.float32)
+    linear = ridge_scores(Xtr, ytr, Xte, rank=8)
+    if linear.shape != (80,) or not np.all(np.isfinite(linear)):
+        raise RuntimeError("ridge self-test failed")
+    seq = rng.normal(size=(80, 2, 14)).astype(np.float32)
+    rr = random_recurrent_features(seq, seed=8, width=32)
+    if rr.shape != (80, 32) or not np.all(np.isfinite(rr)):
+        raise RuntimeError("random reservoir self-test failed")
+    rows = []
+    for i in range(80):
+        rows.append({
+            "uid": f"test:{i:03d}",
+            "layout_correct": bool(i % 4 == 0),
+            "full_oracle": bool(i % 4 in (0, 1)),
+            "benefit": int(i % 4 == 1),
+        })
+    cv = curve(rows, np.linspace(1.0, 0.0, 80))
+    if len(cv["points"]) != len(BUDGETS):
+        raise RuntimeError("curve self-test failed")
+    return {
+        "static_shape": list(Xtr.shape),
+        "sequence_shape": list(seq.shape),
+        "random_reservoir_shape": list(rr.shape),
+        "curve_points": len(cv["points"]),
+        "ok": True,
+    }
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--model-dir", required=True)
-    ap.add_argument("--model-file", required=True)
-    ap.add_argument("--expected-sha256", required=True)
+    ap.add_argument("--model-dir")
+    ap.add_argument("--model-file")
+    ap.add_argument("--expected-sha256")
     ap.add_argument("--calibration-seeds", default="20261028,20261029,20261030")
     ap.add_argument("--test-seeds", default="20261031,20261101")
     ap.add_argument("--cases-per-family", type=int, default=8)
     ap.add_argument("--output", default="run-024-controller.json")
+    ap.add_argument("--self-test", action="store_true")
     args = ap.parse_args()
+
+    if args.self_test:
+        print(json.dumps(self_test(), indent=2, sort_keys=True))
+        return
+
+    if not args.model_dir or not args.model_file or not args.expected_sha256:
+        raise SystemExit("model-dir, model-file and expected-sha256 are required")
 
     model_file = Path(args.model_file)
     actual = file_sha256(model_file)
