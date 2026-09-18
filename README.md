@@ -28,4 +28,4 @@ provider-native read-only model mount / stream
 
 Caches are acceleration only. Eviction must not affect reproducibility because the pinned upstream revision plus verified artifact digest remains sufficient to reacquire the actor remotely.
 
-The initial experiment mirrors Helix Model `013-real-substrate-structure-probe` and tests the exact pinned SmolLM2-360M base weights.
+Current workflows include the frozen 360M mechanistic research lane and bounded larger-actor scale controls such as the 1.7B Run 046 probe. The runner owns neither actor lineage nor accepted findings; each execution must remain traceable to the canonical Helix Model run definition and return only compact evidence.
