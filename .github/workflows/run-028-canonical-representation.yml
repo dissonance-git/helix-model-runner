@@ -1,0 +1,96 @@
+name: Helix Model Run 028 - canonical representation transfer
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/run-028-canonical-representation.yml'
+      - 'run_028_canonical_representation.py'
+      - 'offline_reasoning_battery.py'
+      - 'offline_reasoning_content_probe.py'
+      - 'run_026_capability_substitution.py'
+
+permissions:
+  contents: read
+
+jobs:
+  representation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      MODEL_REVISION: f8027fd0eaeea54caa13c31d31b9fdc459c38b49
+      MODEL_SHA256: 7aaff6661428bed033abba9522bec81938678642cca3181fe752b6ca9e1e540f
+      MODEL_BYTES: '723674912'
+      HF_HUB_DISABLE_XET: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      OMP_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '4'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned evaluation stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
+          python -m pip install --disable-pip-version-check transformers==4.56.2 safetensors==0.6.2 huggingface-hub==0.34.4 accelerate==1.10.1
+
+      - name: Verify exact worker sources and answer-blind transformers
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile offline_reasoning_battery.py offline_reasoning_content_probe.py run_026_capability_substitution.py run_028_canonical_representation.py
+          python run_028_canonical_representation.py --self-test | tee run-028-transform-self-test.json
+          sha256sum offline_reasoning_battery.py offline_reasoning_content_probe.py run_026_capability_substitution.py run_028_canonical_representation.py run-028-transform-self-test.json
+
+      - name: Fetch exact frozen actor
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from huggingface_hub import snapshot_download
+          import os
+          snapshot_download(
+              repo_id='HuggingFaceTB/SmolLM2-360M',
+              revision=os.environ['MODEL_REVISION'],
+              local_dir='model-src',
+              allow_patterns=['*.json','*.model','*.txt','model.safetensors'],
+          )
+          PY
+          test "$(stat -c '%s' model-src/model.safetensors)" = "$MODEL_BYTES"
+          printf '%s  %s\n' "$MODEL_SHA256" model-src/model.safetensors | sha256sum --check --strict
+
+      - name: Execute canonical representation transfer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python run_028_canonical_representation.py \
+            --model-dir model-src \
+            --model-file model-src/model.safetensors \
+            --expected-sha256 "$MODEL_SHA256" \
+            --seeds 20260921,20260922,20260923 \
+            --cases-per-family 8 \
+            --output run-028-representation.json | tee run-028-representation.log
+          sha256sum run-028-representation.json
+
+      - name: Remove model bytes before retention
+        if: always()
+        shell: bash
+        run: rm -rf model-src ~/.cache/huggingface ~/.cache/pip
+
+      - name: Publish compact evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-028-canonical-representation
+          path: |
+            run-028-representation.json
+            run-028-representation.log
+            run-028-transform-self-test.json
+          if-no-files-found: warn
+          retention-days: 14
