@@ -164,13 +164,16 @@ def matrix_operators(surfaces: dict[str, str]) -> list[tuple[str, str, list[str]
     exact_choices = [" ".join(choice) for choice in choices]
 
     observations: dict[str, list[str]] = {"00":[],"01":[],"10":[],"11":[]}
-    for a,b,c in demos:
+    names = "pqrst"
+    for demo_index,(a,b,c) in enumerate(demos, start=1):
         for i in range(5):
-            observations[a[i]+b[i]].append(c[i])
+            observations[a[i]+b[i]].append(
+                f"demo{demo_index}:{names[i]}->{c[i]}"
+            )
     quotient_rows = []
-    for pair, outs in observations.items():
+    for pair, provenance in observations.items():
         quotient_rows.append(
-            f"equivalence class input={pair}: observed outputs={outs}"
+            f"equivalence class input={pair}: observations={provenance}"
         )
     query_pairs = [qa[i]+qb[i] for i in range(5)]
     quotient = (
@@ -214,8 +217,12 @@ def planning_operators(surfaces: dict[str, str]) -> list[tuple[str, str, list[st
                 q=(x+dx,y+dy)
                 if 0<=q[0]<n and 0<=q[1]<n and q not in blocked:
                     edges.append(f"({x},{y}) -{label}-> ({q[0]},{q[1]})")
+    legal_nodes=sorted(
+        (x,y) for y in range(n) for x in range(n) if (x,y) not in blocked
+    )
     graph=(
         "Topology/incidence re-encoding. The board is the exact labeled legal-move graph.\n"
+        f"board size={n}x{n}; legal_nodes={legal_nodes}; blocked={sorted(blocked)}; "
         f"start={start}; goal={goal}; required moves={moves}.\n"
         + "\n".join(edges)
     )
@@ -268,8 +275,8 @@ def stack_operators(surfaces: dict[str, str]) -> list[tuple[str, str, list[str]]
     )
     stack=visible_stack_state(prefix)
     lifted=(
-        "Coordinate/state lift for a pushdown process. The visible prefix has already been "
-        "processed by the explicit LIFO pair table.\n"
+        "Coordinate/state lift for a pushdown process. Preserve the visible source and expose its exact current state.\n"
+        f"source prefix tokens={prefix}; pair table={PAIR}.\n"
         f"remaining opener stack bottom->top={stack}; required closer for the current top, if any, "
         f"is {PAIR.get(stack[-1],'none') if stack and stack[-1] != 'INVALID_VISIBLE_PREFIX' else 'invalid'}. "
         "Continue applying the same LIFO rule to a candidate completion until the stack is empty."
