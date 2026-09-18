@@ -1,0 +1,34 @@
+name: Verify Helix donor MCP surface
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/verify-helix-donor-surface.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Fetch exact public Helix files
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://gitlab.com/dissonance-git/Helix/-/raw/main'
+          curl -fsSL "$base/engine/query/evidence/repositories.py" -o repositories.py
+          curl -fsSL "$base/engine/query/mcp/local_surface.py" -o local_surface.py
+          curl -fsSL "$base/engine/tests/test_repository_evidence.py" -o test_repository_evidence.py
+          curl -fsSL "$base/engine/tests/test_mcp_local_surface.py" -o test_mcp_local_surface.py
+          sha256sum repositories.py local_surface.py test_repository_evidence.py test_mcp_local_surface.py
+      - name: Compile changed Python surfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile repositories.py local_surface.py test_repository_evidence.py test_mcp_local_surface.py
