@@ -17,18 +17,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Fetch exact public Helix files
+      - name: Hash authenticated Helix snapshots
         shell: bash
-        run: |
-          set -euo pipefail
-          base='https://gitlab.com/dissonance-git/Helix/-/raw/main'
-          curl -fsSL "$base/engine/query/evidence/repositories.py" -o repositories.py
-          curl -fsSL "$base/engine/query/mcp/local_surface.py" -o local_surface.py
-          curl -fsSL "$base/engine/tests/test_repository_evidence.py" -o test_repository_evidence.py
-          curl -fsSL "$base/engine/tests/test_mcp_local_surface.py" -o test_mcp_local_surface.py
-          sha256sum repositories.py local_surface.py test_repository_evidence.py test_mcp_local_surface.py
+        run: sha256sum verify/helix-donor/repositories.py verify/helix-donor/local_surface.py verify/helix-donor/test_repository_evidence.py verify/helix-donor/test_mcp_local_surface.py
       - name: Compile changed Python surfaces
         shell: bash
-        run: |
-          set -euo pipefail
-          python -m py_compile repositories.py local_surface.py test_repository_evidence.py test_mcp_local_surface.py
+        run: python -m py_compile verify/helix-donor/repositories.py verify/helix-donor/local_surface.py verify/helix-donor/test_repository_evidence.py verify/helix-donor/test_mcp_local_surface.py
