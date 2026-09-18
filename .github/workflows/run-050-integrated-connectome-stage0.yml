@@ -1,0 +1,176 @@
+name: Helix Model Run 050 - integrated connectome stage 0
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reversible-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - slug: 360m
+            actor_model: HuggingFaceTB/SmolLM2-360M
+            actor_revision: f8027fd0eaeea54caa13c31d31b9fdc459c38b49
+            model_sha256: 7aaff6661428bed033abba9522bec81938678642cca3181fe752b6ca9e1e540f
+          - slug: 1-7b
+            actor_model: HuggingFaceTB/SmolLM2-1.7B
+            actor_revision: fc3154c71b5d1223100f74f4ede67eb44374bc27
+            model_sha256: 1193528982f4ac0c0b707ce36fd7dc03a0ef6f3e1a432deb886dce2e90c300c0
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      HF_HUB_DISABLE_XET: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      OMP_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '4'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Restore immutable actor cache
+        id: actor-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/hf/hub
+          key: hf-${{ matrix.slug }}-${{ matrix.actor_revision }}-${{ matrix.model_sha256 }}
+
+      - name: Install pinned smoke stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
+          python -m pip install --disable-pip-version-check transformers==4.56.2 safetensors==0.6.2 huggingface-hub==0.34.4 accelerate==1.10.1 numpy==2.3.3
+
+      - name: Verify runner syntax before heavy acquisition
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile run_050_integrated_connectome_factorial.py
+          sha256sum run_050_integrated_connectome_factorial.py
+
+      - name: Fetch and verify bounded MaleCNS graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            "https://raw.githubusercontent.com/leetae9yu/fly-as-a-lm/8787647a09f0c2730516b1f47e6bf5248a1ee0c4/data/central_connectome/malecns_v1_cb_intrinsic_n5600.npz" \
+            --output malecns-v1-cb-intrinsic-n5600.npz
+          echo "738d23289b7345dcf49a25e9305d106e7349fca87b93f97df8698db2753ce935  malecns-v1-cb-intrinsic-n5600.npz" | sha256sum --check
+
+      - name: Resolve exact actor remotely
+        id: actor
+        shell: bash
+        env:
+          HF_HOME: ${{ runner.temp }}/hf
+          ACTOR_MODEL: ${{ matrix.actor_model }}
+          ACTOR_REVISION: ${{ matrix.actor_revision }}
+          MODEL_SHA256: ${{ matrix.model_sha256 }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from hashlib import sha256
+          from huggingface_hub import snapshot_download
+          from pathlib import Path
+          import os
+
+          snapshot = Path(snapshot_download(
+              repo_id=os.environ["ACTOR_MODEL"],
+              revision=os.environ["ACTOR_REVISION"],
+              cache_dir=Path(os.environ["HF_HOME"]) / "hub",
+              allow_patterns=[
+                  "*.json",
+                  "*.model",
+                  "*.txt",
+                  "merges.txt",
+                  "vocab.json",
+                  "model.safetensors",
+              ],
+          ))
+          model_file = snapshot / "model.safetensors"
+          digest = sha256()
+          with model_file.open("rb") as handle:
+              while chunk := handle.read(8 * 1024 * 1024):
+                  digest.update(chunk)
+          observed = digest.hexdigest()
+          if observed != os.environ["MODEL_SHA256"]:
+              raise SystemExit(
+                  f"model digest mismatch: expected {os.environ['MODEL_SHA256']}, observed {observed}"
+              )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"snapshot={snapshot}\n")
+              out.write(f"model_bytes={model_file.stat().st_size}\n")
+          print(f"verified actor={os.environ['ACTOR_MODEL']} revision={os.environ['ACTOR_REVISION']}")
+          print(f"model_bytes={model_file.stat().st_size} sha256={observed}")
+          PY
+
+      - name: Execute reversible integrated-organ smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          python run_050_integrated_connectome_factorial.py \
+            --model-dir "${{ steps.actor.outputs.snapshot }}" \
+            --model-file "${{ steps.actor.outputs.snapshot }}/model.safetensors" \
+            --expected-model-sha256 "${{ matrix.model_sha256 }}" \
+            --graph malecns-v1-cb-intrinsic-n5600.npz \
+            --actor-model "${{ matrix.actor_model }}" \
+            --actor-revision "${{ matrix.actor_revision }}" \
+            --output "run-050-stage0-${{ matrix.slug }}.json" \
+            | tee "run-050-stage0-${{ matrix.slug }}.log"
+          sha256sum "run-050-stage0-${{ matrix.slug }}.json"
+
+      - name: Record transport receipt
+        if: always()
+        shell: bash
+        env:
+          CACHE_HIT: ${{ steps.actor-cache.outputs.cache-hit }}
+          MODEL_BYTES: ${{ steps.actor.outputs.model_bytes }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          Path("run-050-transport.json").write_text(
+              json.dumps(
+                  {
+                      "actor_cache_hit": os.environ.get("CACHE_HIT", ""),
+                      "model_bytes": int(os.environ.get("MODEL_BYTES") or 0),
+                      "model_residency": "remote-only",
+                      "graph_residency": "remote-only",
+                      "workstation_download": False,
+                      "git_weight_retention": False,
+                      "git_connectome_retention": False,
+                  },
+                  indent=2,
+                  sort_keys=True,
+              ) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Remove heavyweight bytes before retention
+        if: always()
+        shell: bash
+        run: |
+          rm -f malecns-v1-cb-intrinsic-n5600.npz
+          rm -rf "${{ runner.temp }}/hf"
+
+      - name: Publish compact smoke evidence only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-050-stage0-${{ matrix.slug }}
+          path: |
+            run-050-stage0-${{ matrix.slug }}.json
+            run-050-stage0-${{ matrix.slug }}.log
+            run-050-transport.json
+          if-no-files-found: warn
+          retention-days: 14
