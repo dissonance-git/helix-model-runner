@@ -324,7 +324,11 @@ def evaluate(model_dir: str, seeds: list[int], cases_per_family: int) -> dict[st
         for case in cases:
             canonical=build_representations(case["family"],case["surfaces"])
             source_prompt, source_choices=canonical["layout"]
+            familiar_prompt, familiar_choices=canonical["familiar"]
             source_stem=strip_answer_marker(source_prompt)
+            surface_names=sorted(case["surfaces"])
+            primary_prompt, primary_choices=surface_task_and_choices(case["surfaces"][surface_names[0]])
+            secondary_prompt, secondary_choices=surface_task_and_choices(case["surfaces"][surface_names[1]])
             ops=operators_for_case(case["family"],case["surfaces"])
             if len(ops)!=2:
                 raise AssertionError("expected two exact operators")
@@ -332,7 +336,10 @@ def evaluate(model_dir: str, seeds: list[int], cases_per_family: int) -> dict[st
             op2_id,op2_stem,op2_choices=ops[1]
 
             prompts={
+                "primary":(primary_prompt,primary_choices),
+                "secondary":(secondary_prompt,secondary_choices),
                 "source":(source_prompt,source_choices),
+                "familiar":(familiar_prompt,familiar_choices),
                 "op1":(op1_stem+"\nAnswer value:",op1_choices),
                 "op2":(op2_stem+"\nAnswer value:",op2_choices),
                 "source_op1":(compose(source_stem,op1_stem),op1_choices),
@@ -345,6 +352,16 @@ def evaluate(model_dir: str, seeds: list[int], cases_per_family: int) -> dict[st
             preds={name:int(v["prediction"]) for name,v in scores.items()}
             correct=int(case["correct_index"])
             source_correct=preds["source"]==correct
+            sibling_names=("primary","secondary","source","familiar")
+            sibling_predictions=[preds[name] for name in sibling_names]
+            sibling_unanimous=len(set(sibling_predictions))==1
+            sibling_has_correct=any(preds[name]==correct for name in sibling_names)
+            exact_has_correct=preds["op1"]==correct or preds["op2"]==correct
+            exact_or_composite_has_correct=(
+                exact_has_correct
+                or preds["source_op1"]==correct
+                or preds["source_op2"]==correct
+            )
             op_only=[
                 name for name in ("op1","op2")
                 if preds[name]==correct and not source_correct
@@ -364,6 +381,10 @@ def evaluate(model_dir: str, seeds: list[int], cases_per_family: int) -> dict[st
                 "correct_index":correct,
                 "operator_ids":[op1_id,op2_id],
                 **{f"{name}_prediction":pred for name,pred in preds.items()},
+                "sibling_unanimous":sibling_unanimous,
+                "sibling_has_correct":sibling_has_correct,
+                "exact_operator_rescues_sibling_failure":bool((not sibling_has_correct) and exact_has_correct),
+                "exact_or_composite_rescues_sibling_failure":bool((not sibling_has_correct) and exact_or_composite_has_correct),
                 "operator_only_correct":op_only,
                 "strict_source_operator_composition_correct":composed_only,
                 "operator_predictions_disagree":preds["op1"]!=preds["op2"],
@@ -385,9 +406,10 @@ def evaluate(model_dir: str, seeds: list[int], cases_per_family: int) -> dict[st
             })
         spec.append({"seed":seed,"cases":seed_spec})
 
-    arm_keys=["source","op1","op2","source_op1","source_op2"]
+    arm_keys=["primary","secondary","source","familiar","op1","op2","source_op1","source_op2"]
     arms={name:summarize(rows,f"{name}_prediction") for name in arm_keys}
     source_cov=sum(r["source_prediction"]==r["correct_index"] for r in rows)
+    sibling_cov=sum(r["sibling_has_correct"] for r in rows)
     op_cov=sum(
         r["source_prediction"]==r["correct_index"]
         or r["op1_prediction"]==r["correct_index"]
@@ -398,6 +420,8 @@ def evaluate(model_dir: str, seeds: list[int], cases_per_family: int) -> dict[st
         any(r[f"{name}_prediction"]==r["correct_index"] for name in arm_keys)
         for r in rows
     )
+    unanimous_wrong=[r for r in rows if r["sibling_unanimous"] and not r["sibling_has_correct"]]
+    split_wrong=[r for r in rows if (not r["sibling_unanimous"]) and not r["sibling_has_correct"]]
     resources=scorer.counters()
     resources["wall_seconds"]=time.time()-started
 
@@ -416,6 +440,8 @@ def evaluate(model_dir: str, seeds: list[int], cases_per_family: int) -> dict[st
         "arms":arms,
         "coverage":{
             "source_correct":source_cov,
+            "sibling_four_view_correct":sibling_cov,
+            "sibling_four_view_coverage":sibling_cov/len(rows),
             "source_accuracy":source_cov/len(rows),
             "source_plus_exact_operators_correct":op_cov,
             "source_plus_exact_operators_coverage":op_cov/len(rows),
@@ -424,6 +450,17 @@ def evaluate(model_dir: str, seeds: list[int], cases_per_family: int) -> dict[st
             "operator_only_correct_cases":sum(bool(r["operator_only_correct"]) for r in rows),
             "strict_source_operator_composition_cases":sum(bool(r["strict_source_operator_composition_correct"]) for r in rows),
             "operator_disagreement_cases":sum(r["operator_predictions_disagree"] for r in rows),
+        },
+        "representation_frontier":{
+            "sibling_unanimous_cases":sum(r["sibling_unanimous"] for r in rows),
+            "sibling_split_cases":sum(not r["sibling_unanimous"] for r in rows),
+            "unanimous_wrong_cases":len(unanimous_wrong),
+            "unanimous_wrong_exact_operator_rescues":sum(r["exact_operator_rescues_sibling_failure"] for r in unanimous_wrong),
+            "unanimous_wrong_exact_or_composite_rescues":sum(r["exact_or_composite_rescues_sibling_failure"] for r in unanimous_wrong),
+            "split_wrong_cases":len(split_wrong),
+            "split_wrong_exact_operator_rescues":sum(r["exact_operator_rescues_sibling_failure"] for r in split_wrong),
+            "split_wrong_exact_or_composite_rescues":sum(r["exact_or_composite_rescues_sibling_failure"] for r in split_wrong),
+            "routing_interpretation":"Disagreement is an acquisition signal, not a vote. Unanimity marks saturation of the current sibling neighborhood; exact-operator rescue tests rotation outside that neighborhood."
         },
         "resources":resources,
         "rows":rows,
