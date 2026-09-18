@@ -435,6 +435,40 @@ def evaluate(model_dir: str, seeds: list[int], cases_per_family: int) -> dict[st
     }
 
 
+def self_test(seed: int = 20261019, cases_per_family: int = 4) -> dict[str, Any]:
+    cases = build_battery(seed, cases_per_family)
+    counts: dict[str, int] = defaultdict(int)
+    digests = []
+    for case in cases:
+        # Critical contract: operator builder receives family + visible surfaces only.
+        ops = operators_for_case(case["family"], dict(case["surfaces"]))
+        if len(ops) != 2:
+            raise AssertionError((case["case_id"], len(ops)))
+        canonical = build_representations(case["family"], case["surfaces"])
+        source = strip_answer_marker(canonical["layout"][0])
+        for operator_id, stem, choices in ops:
+            if not stem.strip() or len(choices) != 4:
+                raise AssertionError((case["case_id"], operator_id))
+            composite = compose(source, stem)
+            if not composite.endswith("Answer value:"):
+                raise AssertionError((case["case_id"], operator_id, "composite"))
+            counts[f"{case['family']}/{operator_id}"] += 1
+            digests.append(hashlib.sha256(
+                json.dumps({
+                    "family": case["family"],
+                    "operator_id": operator_id,
+                    "stem": stem,
+                    "choices": choices,
+                }, sort_keys=True).encode()
+            ).hexdigest())
+    return {
+        "cases": len(cases),
+        "operator_views": len(digests),
+        "counts": dict(sorted(counts.items())),
+        "transform_digest": hashlib.sha256("|".join(digests).encode()).hexdigest(),
+    }
+
+
 def main() -> None:
     parser=argparse.ArgumentParser()
     parser.add_argument("--model-dir",required=True)
@@ -443,7 +477,12 @@ def main() -> None:
     parser.add_argument("--seeds",default="20261019,20261020,20261021")
     parser.add_argument("--cases-per-family",type=int,default=4)
     parser.add_argument("--output",default="run-039-exact-operators.json")
+    parser.add_argument("--self-test",action="store_true")
     args=parser.parse_args()
+
+    if args.self_test:
+        print(json.dumps(self_test(), indent=2, sort_keys=True))
+        return
 
     model_path=Path(args.model_file)
     observed=hashlib.sha256(model_path.read_bytes()).hexdigest()
