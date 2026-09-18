@@ -18,7 +18,6 @@ jobs:
       ACTOR_MODEL: HuggingFaceTB/SmolLM2-1.7B
       MODEL_REVISION: fc3154c71b5d1223100f74f4ede67eb44374bc27
       MODEL_SHA256: 1193528982f4ac0c0b707ce36fd7dc03a0ef6f3e1a432deb886dce2e90c300c0
-      HF_HOME: ${{ runner.temp }}/hf
       HF_HUB_DISABLE_XET: '1'
       TOKENIZERS_PARALLELISM: 'false'
       OMP_NUM_THREADS: '4'
@@ -69,6 +68,8 @@ jobs:
       - name: Resolve exact frozen actor remotely
         id: actor
         shell: bash
+        env:
+          HF_HOME: ${{ runner.temp }}/hf
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -85,7 +86,6 @@ jobs:
                   "*.json",
                   "*.model",
                   "*.txt",
-                  "*.json",
                   "merges.txt",
                   "vocab.json",
                   "model.safetensors",
