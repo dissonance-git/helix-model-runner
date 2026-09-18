@@ -53,6 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           python -m py_compile run_024_fly_reasoning_controller.py connectome_open_weight_router.py connectome_temporal_probe.py connectome_hierarchy_probe.py run_032_cross_representation_invariant.py run_028_canonical_representation.py run_026_capability_substitution.py offline_reasoning_battery.py
+          python run_024_fly_reasoning_controller.py --self-test | tee run-024-self-test.json
           sha256sum run_024_fly_reasoning_controller.py connectome_open_weight_router.py connectome_temporal_probe.py connectome_hierarchy_probe.py run_032_cross_representation_invariant.py run_028_canonical_representation.py run_026_capability_substitution.py offline_reasoning_battery.py
 
       - name: Fetch exact frozen actor
@@ -106,6 +107,7 @@ jobs:
         with:
           name: run-024-temporal-reasoning-controller
           path: |
+            run-024-self-test.json
             run-024-controller.json
             run-024-controller.log
           if-no-files-found: warn
