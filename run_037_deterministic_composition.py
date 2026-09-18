@@ -99,6 +99,8 @@ def evaluate(model_dir: str, seeds: list[int], cases_per_family: int) -> dict[st
             prompts = {
                 "A": views["A"] + "\nAnswer value:",
                 "B": views["B"] + "\nAnswer value:",
+                "P": views["P"] + "\nAnswer value:",
+                "S": views["S"] + "\nAnswer value:",
                 "AB": composite_prompt(["A","B"], views),
                 "BA": composite_prompt(["B","A"], views),
                 "PSAB": composite_prompt(["P","S","A","B"], views),
@@ -110,8 +112,6 @@ def evaluate(model_dir: str, seeds: list[int], cases_per_family: int) -> dict[st
             }
             preds = {name:int(value["prediction"]) for name,value in scored.items()}
             correct = int(case["correct_index"])
-            singleton_preds = [preds["A"],preds["B"],preds["P"] if "P" in preds else -1]
-            # P/S are not separately scored in this run; source singleton coverage is A/B only.
             strict_ab = preds["A"] != correct and preds["B"] != correct and preds["AB"] == correct
             strict_ba = preds["A"] != correct and preds["B"] != correct and preds["BA"] == correct
             order_disagree = preds["AB"] != preds["BA"]
@@ -119,6 +119,8 @@ def evaluate(model_dir: str, seeds: list[int], cases_per_family: int) -> dict[st
             four_new = (
                 preds["A"] != correct
                 and preds["B"] != correct
+                and preds["P"] != correct
+                and preds["S"] != correct
                 and preds["PSAB"] == correct
             )
             rows.append({
@@ -130,6 +132,8 @@ def evaluate(model_dir: str, seeds: list[int], cases_per_family: int) -> dict[st
                 "correct_index":correct,
                 "A_prediction":preds["A"],
                 "B_prediction":preds["B"],
+                "P_prediction":preds["P"],
+                "S_prediction":preds["S"],
                 "AB_prediction":preds["AB"],
                 "BA_prediction":preds["BA"],
                 "PSAB_prediction":preds["PSAB"],
@@ -138,7 +142,7 @@ def evaluate(model_dir: str, seeds: list[int], cases_per_family: int) -> dict[st
                 "strict_BA_only_correct":strict_ba,
                 "operator_order_disagrees":order_disagree,
                 "operator_order_one_correct":order_one_correct,
-                "four_view_composite_new_vs_AB_singletons":four_new,
+                "four_view_composite_new_vs_all_singletons":four_new,
                 "prompt_sha256":{name:hashlib.sha256(p.encode()).hexdigest() for name,p in prompts.items()},
             })
             seed_spec.append({
@@ -153,18 +157,25 @@ def evaluate(model_dir: str, seeds: list[int], cases_per_family: int) -> dict[st
     arms={
         "A":summarize(rows,"A_prediction"),
         "B":summarize(rows,"B_prediction"),
+        "P":summarize(rows,"P_prediction"),
+        "S":summarize(rows,"S_prediction"),
         "A+B":summarize(rows,"AB_prediction"),
         "B+A":summarize(rows,"BA_prediction"),
         "P+S+A+B":summarize(rows,"PSAB_prediction"),
         "B+A+S+P":summarize(rows,"BASP_prediction"),
     }
     seed_coverage=sum(
-        r["A_prediction"]==r["correct_index"] or r["B_prediction"]==r["correct_index"]
+        r["A_prediction"]==r["correct_index"]
+        or r["B_prediction"]==r["correct_index"]
+        or r["P_prediction"]==r["correct_index"]
+        or r["S_prediction"]==r["correct_index"]
         for r in rows
     )
     plus_pair=sum(
         r["A_prediction"]==r["correct_index"]
         or r["B_prediction"]==r["correct_index"]
+        or r["P_prediction"]==r["correct_index"]
+        or r["S_prediction"]==r["correct_index"]
         or r["AB_prediction"]==r["correct_index"]
         or r["BA_prediction"]==r["correct_index"]
         for r in rows
@@ -172,6 +183,8 @@ def evaluate(model_dir: str, seeds: list[int], cases_per_family: int) -> dict[st
     plus_all=sum(
         r["A_prediction"]==r["correct_index"]
         or r["B_prediction"]==r["correct_index"]
+        or r["P_prediction"]==r["correct_index"]
+        or r["S_prediction"]==r["correct_index"]
         or r["AB_prediction"]==r["correct_index"]
         or r["BA_prediction"]==r["correct_index"]
         or r["PSAB_prediction"]==r["correct_index"]
@@ -190,8 +203,8 @@ def evaluate(model_dir: str, seeds: list[int], cases_per_family: int) -> dict[st
         "source_battery_sha256":sha256_json(public_spec),
         "arms":arms,
         "emergence":{
-            "A_or_B_coverage_correct":seed_coverage,
-            "A_or_B_coverage":seed_coverage/len(rows),
+            "singleton_four_view_coverage_correct":seed_coverage,
+            "singleton_four_view_coverage":seed_coverage/len(rows),
             "through_ordered_pair_composites_correct":plus_pair,
             "through_ordered_pair_composites_coverage":plus_pair/len(rows),
             "through_all_composites_correct":plus_all,
@@ -200,7 +213,7 @@ def evaluate(model_dir: str, seeds: list[int], cases_per_family: int) -> dict[st
             "strict_BA_only_correct_cases":sum(r["strict_BA_only_correct"] for r in rows),
             "operator_order_disagreement_cases":sum(r["operator_order_disagrees"] for r in rows),
             "operator_order_one_correct_cases":sum(r["operator_order_one_correct"] for r in rows),
-            "four_view_composite_new_cases":sum(r["four_view_composite_new_vs_AB_singletons"] for r in rows),
+            "four_view_composite_new_cases":sum(r["four_view_composite_new_vs_all_singletons"] for r in rows),
         },
         "resources":resources,
         "rows":rows,
