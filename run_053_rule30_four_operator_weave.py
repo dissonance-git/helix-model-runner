@@ -195,28 +195,30 @@ def feature_aliases(variable_features: list[str]) -> dict[str, str]:
 
 
 def build_prompt(variable_features: list[str], rows: list[dict[str, Any]]) -> str:
-    # Exact transpose of the same width-4 labeled feature matrix with compact,
-    # reversible semantic aliases. No feature truth value or label is removed.
+    # Lossless 42-bit transpose. Rows 0..9 are BRANCH and 10..41 NONBRANCH.
+    # Each feature is its exact truth column encoded as an 11-hex-digit bitset.
     branch_rows = [row for row in rows if row["label"] == "BRANCH"]
     nonbranch_rows = [row for row in rows if row["label"] == "NONBRANCH"]
+    ordered_rows = branch_rows + nonbranch_rows
     aliases = feature_aliases(variable_features)
     full_to_alias = {full: alias for alias, full in aliases.items()}
-    matrix = {}
+    truth = {}
     for name in variable_features:
-        alias = full_to_alias[name]
-        matrix[alias] = [
-            [i for i, row in enumerate(branch_rows) if name in row["true_features"]],
-            [i for i, row in enumerate(nonbranch_rows) if name in row["true_features"]],
-        ]
+        mask = 0
+        for i, row in enumerate(ordered_rows):
+            if name in row["true_features"]:
+                mask |= 1 << i
+        truth[full_to_alias[name]] = format(mask, "011x")
+    target = (1 << len(branch_rows)) - 1
     payload = {
-        "task": "Find 1-3 short DNF formulas selecting every B row and no N row. Only width4 is shown; hidden widths 8/16/32 are tested unchanged.",
+        "task": "Find 1-3 shortest DNF formulas whose exact 42-row truth mask equals target. Hidden widths 8/16/32 are tested unchanged.",
         "route": "DUALIZE>FACTOR>LIFT>PROJECT",
-        "legend": "xp1/p2/p4=period(x)<=1/2/4;xz/xo/xe=zero/ones/even-weight;xhr/xhc=half-repeat/half-complement;x=y equality;x~y complement;Dx=y cyclic derivative(x)=y",
-        "rows": {"B": len(branch_rows), "N": len(nonbranch_rows)},
-        "truth": matrix,
-        "truth_format": "alias:[B_true_row_ids,N_true_row_ids]; !alias is complement within each group",
+        "legend": "xp1/p2/p4=period(x)<=1/2/4;xz/xo/xe=zero/ones/even;xhr/xhc=half-repeat/half-complement;x=y equal;x~y complement;Dx=y cyclic-derivative(x)=y",
+        "bits": "hex bit i=row i; rows0..9=B,10..41=N; !alias=42-bit complement; AND literals per clause, OR clauses",
+        "target": format(target, "011x"),
+        "truth": truth,
         "output": {"candidates": [{"id": "x", "dnf": [["alias", "!alias"]]}]},
-        "rules": "DNF=OR of AND clauses. Use aliases exactly. No row/state IDs in formulas. Prefer fewest literals. JSON only. No all-width claim.",
+        "rules": "Use aliases exactly. No row/state IDs in formulas. Prefer fewest literals. JSON only. No all-width claim.",
     }
     return json.dumps(payload, separators=(",", ":"), sort_keys=True)
 
