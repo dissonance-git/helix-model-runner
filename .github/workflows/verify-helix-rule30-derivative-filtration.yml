@@ -1,0 +1,45 @@
+name: Verify Helix Rule30 derivative filtration
+
+on:
+  push:
+    paths:
+      - '.github/workflows/verify-helix-rule30-derivative-filtration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Execute exact derivative-filtration tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd verification/helix-22663e11
+          python -m pip install --disable-pip-version-check pytest
+          python -m py_compile             engine/runtime/experiments/cellular_automata/rule30_077_zero_tail_basin.py             engine/runtime/experiments/cellular_automata/rule30_079_dyadic_derivative_filtration.py             engine/runtime/experiments/cellular_automata/tests/test_rule30_079_dyadic_derivative_filtration.py
+          python -m pytest -q             engine/runtime/experiments/cellular_automata/tests/test_rule30_079_dyadic_derivative_filtration.py
+
+      - name: Emit exact result
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd verification/helix-22663e11
+          python engine/runtime/experiments/cellular_automata/rule30_079_dyadic_derivative_filtration.py             --output rule30-079-result.json             | tee rule30-079.log
+          sha256sum rule30-079-result.json
+
+      - name: Publish verification receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: rule30-079-derivative-filtration
+          path: |
+            verification/helix-22663e11/rule30-079-result.json
+            verification/helix-22663e11/rule30-079.log
+          retention-days: 14
+
+# canonical-helix: 22663e11d816073226271218ba8c5469b8f465be
