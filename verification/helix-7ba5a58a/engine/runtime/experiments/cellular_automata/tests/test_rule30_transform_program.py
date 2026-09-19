@@ -9,8 +9,11 @@ from engine.runtime.experiments.cellular_automata.rule30_transform_program impor
     PROJECT_TYPE,
     MECHANISM_BASIS_OPERATORS,
     MECHANISM_PROGRAM_OPERATORS,
+    MECHANISM_TASK_BASIS_OPERATORS,
+    MECHANISM_TASK_PROGRAM_OPERATORS,
     build_rule30_transform_registry,
     compile_rule30_branch_mechanism,
+    compile_rule30_branch_mechanism_task,
     compile_rule30_branch_task,
 )
 
@@ -91,3 +94,25 @@ def test_rule30_branch_mechanism_reprojection_is_stable_through_width32() -> Non
         assert mechanism["mechanism_disjoint"] is True
         assert mechanism["branch_depth_counts"] == {"3": 2, "4": 4, "5": 4}
         assert mechanism["maximum_branch_component_period"] == 4
+
+
+def test_rule30_mechanism_actor_task_is_compiler_generated_and_hidden_width_blind() -> None:
+    result = compile_rule30_branch_mechanism_task()
+    task = result["task"]
+    program = result["program"]
+
+    assert result["status"] == "compiled-mechanism-actor-task"
+    assert tuple(program["operators"]) == MECHANISM_TASK_PROGRAM_OPERATORS
+    assert tuple(program["basis_operators"]) == MECHANISM_TASK_BASIS_OPERATORS
+    assert all(step["verification_state"]["status"] == "pass" for step in program["steps"])
+    assert task["heldout_widths"] == [8, 16, 32]
+    assert task["heldout_labels_visible_to_actor"] is False
+    assert task["training_patterns"] == [
+        {"E": False, "S": False, "branch": False, "count": 32},
+        {"E": False, "S": True, "branch": True, "count": 8},
+        {"E": True, "S": False, "branch": True, "count": 2},
+    ]
+    assert len(task["training_patterns"]) == 3
+    assert '"state":' not in task["actor_prompt"]
+    assert '"rows":' not in task["actor_prompt"]
+    assert task["actor_prompt_bytes"] < 1200
