@@ -126,7 +126,7 @@ jobs:
             --model-dir "${{ steps.actor.outputs.snapshot }}" \
             --model-file "${{ steps.actor.outputs.snapshot }}/model.safetensors" \
             --expected-sha256 "$MODEL_SHA256" \
-            --max-new-tokens 768 \
+            --max-new-tokens 192 \
             --output run-053-rule30-four-operator-weave.json \
             | tee run-053-rule30-four-operator-weave.log
           sha256sum run-053-rule30-four-operator-weave.json run-053-transport.json
