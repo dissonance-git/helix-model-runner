@@ -366,8 +366,13 @@ def _verify_project(source: Mapping[str, Any], target: Mapping[str, Any]) -> dic
         "actor_prompt_bytes", "recovery_index",
     )
     ok = all(target.get(field) == replay.get(field) for field in fields)
-    prompt = str(target.get("actor_prompt") or "")
-    ok = ok and "state" not in prompt and target.get("classifier_proposal_present") is False
+    actor_payload = target.get("actor_payload")
+    actor_safe = (
+        isinstance(actor_payload, Mapping)
+        and "state" not in actor_payload
+        and "recovery_index" not in actor_payload
+    )
+    ok = ok and actor_safe and target.get("classifier_proposal_present") is False
     return _pass(
         actor_prompt_sha256=target.get("actor_prompt_sha256"),
         actor_prompt_bytes=target.get("actor_prompt_bytes"),
