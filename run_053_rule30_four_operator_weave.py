@@ -165,30 +165,38 @@ def width4_training() -> tuple[Basin, list[str], list[dict[str, Any]]]:
 
 
 def build_prompt(variable_features: list[str], rows: list[dict[str, Any]]) -> str:
+    # Exact transpose of the same width-4 labeled feature matrix. This changes
+    # transport only: no feature or row is removed and no held-out information
+    # is used. Row ids are local within BRANCH/NONBRANCH groups.
+    branch_rows = [row for row in rows if row["label"] == "BRANCH"]
+    nonbranch_rows = [row for row in rows if row["label"] == "NONBRANCH"]
+    compact = {}
+    for name in variable_features:
+        compact[name] = {
+            "B": [i for i, row in enumerate(branch_rows) if name in row["true_features"]],
+            "N": [i for i, row in enumerate(nonbranch_rows) if name in row["true_features"]],
+        }
     payload = {
         "task": (
-            "Infer 1 to 3 small Boolean DNF classifiers for BRANCH from these width-4 examples. "
-            "You see no larger-width labels. Your formulas will be evaluated unchanged on hidden exact widths 8, 16, and 32."
+            "Infer 1 to 3 small Boolean DNF classifiers for BRANCH from exact width-4 evidence. "
+            "Hidden exact widths 8,16,32 will be tested unchanged after your answer."
         ),
-        "research_route": PROGRAM,
-        "grammar": {
-            "output": {"candidates": [{"id": "short-id", "dnf": [["feature", "!feature"]], "mechanism": "brief text"}]},
-            "semantics": "DNF is OR of clauses; each clause is AND of literals; ! negates one allowed feature.",
-            "limits": {
-                "candidates": MAX_CANDIDATES,
-                "clauses_per_candidate": MAX_CLAUSES,
-                "literals_per_clause": MAX_LITERALS_PER_CLAUSE,
-            },
+        "route": [row["operator"] for row in PROGRAM],
+        "route_hint": "DUALIZE ancestry; FACTOR branch/nonbranch; LIFT algebraic features; PROJECT short DNF.",
+        "matrix": {
+            "branch_rows": len(branch_rows),
+            "nonbranch_rows": len(nonbranch_rows),
+            "feature_true_row_ids": compact,
+            "note": "B and N list local row ids where each feature is true. !feature means the complementary rows within that group.",
         },
+        "output": {"candidates": [{"id": "x", "dnf": [["feature", "!feature"]]}]},
+        "limits": {"candidates": 3, "clauses": 4, "literals_per_clause": 6},
         "rules": [
-            "Use only allowed feature names exactly as written.",
-            "Prefer the fewest clauses and literals that fit every shown row.",
-            "Do not encode individual state bitstrings or row IDs.",
-            "Do not claim an all-width theorem.",
-            "Return JSON only, with top-level key candidates.",
+            "DNF=OR of clauses; clause=AND of literals.",
+            "Use feature names exactly; no row ids/state ids in formulas.",
+            "Prefer few clauses/literals that cover every B row and no N row.",
+            "Return JSON only. Do not claim an all-width theorem."
         ],
-        "allowed_features": variable_features,
-        "training_rows": rows,
     }
     return json.dumps(payload, separators=(",", ":"), sort_keys=True)
 
@@ -363,7 +371,9 @@ def actor_generate(model_dir: str, prompt: str, max_new_tokens: int) -> tuple[st
     )
     encoded = tokenizer(rendered, return_tensors="pt")
     prompt_tokens = int(encoded["input_ids"].shape[-1])
-    context_limit = int(getattr(model.config, "max_position_embeddings", 8192) or 8192)
+    config_limit = int(getattr(model.config, "max_position_embeddings", 8192) or 8192)
+    tokenizer_limit = int(getattr(tokenizer, "model_max_length", config_limit) or config_limit)
+    context_limit = min(config_limit, tokenizer_limit) if tokenizer_limit < 1_000_000 else config_limit
     if prompt_tokens + max_new_tokens > context_limit:
         raise RuntimeError(f"prompt plus generation exceeds context: {prompt_tokens}+{max_new_tokens}>{context_limit}")
     started = time.time()
