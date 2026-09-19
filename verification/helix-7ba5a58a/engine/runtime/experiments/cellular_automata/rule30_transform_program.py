@@ -32,16 +32,20 @@ FACTOR_TYPE = "branch-core-plus-forced-exterior"
 LIFT_TYPE = "bounded-algebraic-feature-space"
 PROJECT_TYPE = "small-boolean-dnf-classification-task"
 MECHANISM_TYPE = "branch-mechanism-coordinates"
+MECHANISM_TASK_TYPE = "two-coordinate-boolean-classification-task"
 
 DUAL_OPERATOR = "rule30-dualize-zero-tail"
 FACTOR_OPERATOR = "rule30-factor-branching"
 LIFT_OPERATOR = "rule30-lift-algebraic-features"
 PROJECT_OPERATOR = "rule30-project-actor-task"
 REPROJECT_OPERATOR = "rule30-reproject-branch-mechanism"
+MECHANISM_PROJECT_OPERATOR = "rule30-project-mechanism-task"
 PROGRAM_OPERATORS = (DUAL_OPERATOR, FACTOR_OPERATOR, LIFT_OPERATOR, PROJECT_OPERATOR)
 BASIS_OPERATORS = ("DUALIZE", "FACTOR", "LIFT", "PROJECT")
 MECHANISM_PROGRAM_OPERATORS = (DUAL_OPERATOR, FACTOR_OPERATOR, LIFT_OPERATOR, REPROJECT_OPERATOR)
 MECHANISM_BASIS_OPERATORS = ("DUALIZE", "FACTOR", "LIFT", "REPROJECT")
+MECHANISM_TASK_PROGRAM_OPERATORS = (*MECHANISM_PROGRAM_OPERATORS, MECHANISM_PROJECT_OPERATOR)
+MECHANISM_TASK_BASIS_OPERATORS = (*MECHANISM_BASIS_OPERATORS, "PROJECT")
 
 
 def state_features(state: tuple[int, int, int, int], n: int) -> dict[str, bool]:
@@ -374,6 +378,114 @@ def _verify_reproject(source: Mapping[str, Any], target: Mapping[str, Any]) -> d
     }
 
 
+def _mechanism_project_preconditions(source: Mapping[str, Any]) -> dict[str, Any]:
+    verified = []
+    if source.get("mechanism_complete") is True and source.get("mechanism_disjoint") is True:
+        verified.append("exact-disjoint-branch-mechanism")
+    if int(source.get("width") or 0) == TRAIN_WIDTH:
+        verified.append("width-4-training-scope")
+    return {
+        "status": "pass" if len(verified) == 2 else "fail",
+        "applicable": len(verified) == 2,
+        "exact": True,
+        "verified_preconditions": verified,
+    }
+
+
+def _mechanism_actor_projection(source: Mapping[str, Any]) -> dict[str, Any]:
+    counts = Counter(
+        (
+            bool(row["exceptional_pair"]),
+            bool(row["derivative_chain"]),
+            bool(row["is_branch"]),
+        )
+        for row in source["rows"]
+    )
+    training = [
+        {
+            "E": exceptional,
+            "S": derivative_chain,
+            "branch": branch,
+            "count": int(count),
+        }
+        for (exceptional, derivative_chain, branch), count in sorted(counts.items())
+    ]
+    payload = {
+        "task": (
+            "Infer the shortest exact Boolean rule for branch from the two compiler "
+            "coordinates using only width-4 training rows. Hidden widths 8/16/32 "
+            "are tested unchanged after your answer is frozen."
+        ),
+        "coordinates": {
+            "E": "D(a)!=c AND b=d",
+            "S": "D(b)=c AND D(c)!=d",
+        },
+        "training": training,
+        "output": {
+            "formula": {
+                "op": "or|and|not|var",
+                "args": "for or/and: two expressions; for not: one expression; for var: one of E,S",
+            }
+        },
+        "rules": (
+            "JSON only. Use only E,S and op values or,and,not,var. "
+            "Return one shortest formula. Do not claim an all-width theorem."
+        ),
+    }
+    prompt = json.dumps(payload, separators=(",", ":"), sort_keys=True)
+    return {
+        "width": TRAIN_WIDTH,
+        "heldout_widths": list(HELDOUT_WIDTHS),
+        "heldout_labels_visible_to_actor": False,
+        "training_patterns": training,
+        "actor_payload": payload,
+        "actor_prompt": prompt,
+        "actor_prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
+        "actor_prompt_bytes": len(prompt.encode()),
+        "actor_visible_fields": ["actor_prompt"],
+        "projection_complete": True,
+    }
+
+
+def _mechanism_project(source: Mapping[str, Any]):
+    target = _mechanism_actor_projection(source)
+    return target, {
+        "target_id": "rule30:mechanism-actor-task:w4",
+        "discarded_information": [
+            "individual state identities",
+            "reverse depths",
+            "full 70-feature rows",
+        ],
+        "introduced_information": [
+            "count-compressed two-coordinate truth table",
+        ],
+        "inverse_or_recovery_route": "recompute-mechanism-view-from-canonical-width-4-basin",
+        "expected_observable": "smallest exact Boolean rule over E and S",
+        "peak_intermediate_size": target["actor_prompt_bytes"],
+    }
+
+
+def _verify_mechanism_project(source: Mapping[str, Any], target: Mapping[str, Any]) -> dict[str, Any]:
+    replay = _mechanism_actor_projection(source)
+    fields = (
+        "width", "heldout_widths", "heldout_labels_visible_to_actor",
+        "training_patterns", "actor_payload", "actor_prompt",
+        "actor_prompt_sha256", "actor_prompt_bytes",
+    )
+    ok = all(target.get(field) == replay.get(field) for field in fields)
+    payload = target.get("actor_payload")
+    actor_safe = isinstance(payload, Mapping) and "rows" not in payload and "state" not in payload
+    return _pass(
+        actor_prompt_sha256=target.get("actor_prompt_sha256"),
+        actor_prompt_bytes=target.get("actor_prompt_bytes"),
+        training_pattern_count=len(target.get("training_patterns") or ()),
+    ) if ok and actor_safe else {
+        "status": "fail",
+        "exact": True,
+        "reason": "mechanism actor projection replay or blinding mismatch",
+    }
+
+
 def _project_preconditions(source: Mapping[str, Any]) -> dict[str, Any]:
     rows = tuple(source.get("rows") or ())
     verified = []
@@ -534,6 +646,15 @@ def build_rule30_transform_registry() -> TransformationRegistry:
         cheapest_falsifier="one basin state misclassified by the two mechanism coordinates",
     ))
     registry.register(OperatorSpec(
+        MECHANISM_PROJECT_OPERATOR, (MECHANISM_TYPE,), MECHANISM_TASK_TYPE,
+        ("exact-disjoint-branch-mechanism", "width-4-training-scope"),
+        (BRANCH_OBLIGATION,), basis_operator="PROJECT",
+        implementation=_mechanism_project, verifier=_verify_mechanism_project,
+        precondition_verifier=_mechanism_project_preconditions,
+        certificate_requirements=("count-compressed projection replay", "held-out-label blinding"),
+        cheapest_falsifier="actor task differs from exact two-coordinate width-4 truth table",
+    ))
+    registry.register(OperatorSpec(
         PROJECT_OPERATOR, (LIFT_TYPE,), PROJECT_TYPE,
         ("complete-algebraic-feature-space", "exact-feature-rows", "width-4-training-scope"),
         (BRANCH_OBLIGATION,), basis_operator="PROJECT",
@@ -613,6 +734,41 @@ def compile_rule30_branch_mechanism(width: int) -> dict[str, Any]:
             "The two-coordinate branch identity is established only for the exact finite width executed.",
             "Matching results at several widths do not establish the all-dyadic theorem.",
             "The reprojection is fail-closed: a single false positive, false negative, or overlap rejects the exact transform.",
+        ],
+    }
+
+
+def compile_rule30_branch_mechanism_task() -> dict[str, Any]:
+    """Compile the exact width-4 basin all the way to the two-coordinate actor task."""
+    source = {
+        "width": TRAIN_WIDTH,
+        "semantics": "rule30-right-history",
+        "question": "Can a compressed branch-mechanism view expose the finite invariant to a frozen proposal actor?",
+        "heldout_widths": list(HELDOUT_WIDTHS),
+    }
+    target, program = execute_transform_program(
+        build_rule30_transform_registry(),
+        MECHANISM_TASK_PROGRAM_OPERATORS,
+        source,
+        source_id="rule30:forward-history:w4",
+        source_type=SOURCE_TYPE,
+        required_obligations=(BRANCH_OBLIGATION,),
+        provenance={
+            "owner": "engine.runtime.experiments.cellular_automata.rule30_transform_program",
+            "comparison_run": "dissonance-git/helix-model:runs/053-rule30-four-operator-weave",
+            "next_model_run": "dissonance-git/helix-model:runs/054-rule30-compiler-reprojection",
+        },
+    )
+    return {
+        "schema_version": PROGRAM_VERSION,
+        "status": "compiled-mechanism-actor-task",
+        "task": target,
+        "program": program,
+        "claim_boundary": [
+            "The actor receives only the count-compressed width-4 E/S truth table.",
+            "Widths 8, 16, and 32 remain hidden until the actor answer is frozen.",
+            "The E/S coordinates were retained from prior exact Run 053 control evidence; this run tests representation access, not independent discovery of those coordinates.",
+            "Finite transfer does not establish an all-dyadic theorem.",
         ],
     }
 
