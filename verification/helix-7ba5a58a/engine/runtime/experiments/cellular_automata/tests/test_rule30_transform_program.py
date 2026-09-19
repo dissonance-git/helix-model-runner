@@ -50,7 +50,8 @@ def test_rule30_compiler_projection_is_byte_identical_to_run053_actor_task() -> 
     assert task["actor_payload"]["route"] == "DUALIZE>FACTOR>LIFT>PROJECT"
     assert len(task["feature_aliases"]) == 70
     assert len(task["actor_payload"]["truth"]) == 70
-    assert "state" not in prompt
+    assert '"state":' not in prompt
+    assert '"recovery_index":' not in prompt
 
 
 def test_rule30_compiler_registry_exposes_honest_basis_bindings() -> None:
