@@ -1,0 +1,33 @@
+name: Verify Helix Rule30 transform program
+
+on:
+  push:
+    paths:
+      - '.github/workflows/verify-helix-rule30-transform-program.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact canonical Helix revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none https://gitlab.com/dissonance-git/helix.git helix
+          cd helix
+          git checkout 7ba5a58ae8409040fb90c3b8285829839a09c7c8
+          test "$(git rev-parse HEAD)" = "7ba5a58ae8409040fb90c3b8285829839a09c7c8"
+
+      - name: Run compiler binding tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd helix
+          python -m pip install --disable-pip-version-check pytest
+          python -m py_compile             engine/runtime/experiments/cellular_automata/rule30_transform_program.py             engine/runtime/experiments/cellular_automata/tests/test_rule30_transform_program.py
+          python -m pytest -q             engine/runtime/experiments/cellular_automata/tests/test_rule30_transform_program.py
