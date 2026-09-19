@@ -1,0 +1,121 @@
+name: Helix Model Run 057 - Rule30 neutral label interface
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/run-057-rule30-neutral-label-interface.yml'
+      - 'run_057_rule30_neutral_label_interface.py'
+
+permissions:
+  contents: read
+
+jobs:
+  neutral-label-interface:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - actor_id: 360m
+            model_id: HuggingFaceTB/SmolLM2-360M-Instruct
+            revision: 028493fd3c93bfb0536d0b07a124d8e302e187dd
+            sha256: e6bffe7435d7ddc10fd3b9a9efd429dafbacb1cb17015fb5562664e7532bf86e
+            cache_dir: models--HuggingFaceTB--SmolLM2-360M-Instruct
+          - actor_id: 1.7b
+            model_id: HuggingFaceTB/SmolLM2-1.7B-Instruct
+            revision: d1bb90bcfbe0f211109880f4da18da66f229c4f6
+            sha256: f55217be716b6a997b97b9d8d7eb6fad02e00858f5010ec24f64603c3a98a0e8
+            cache_dir: models--HuggingFaceTB--SmolLM2-1.7B-Instruct
+
+    env:
+      HF_HUB_DISABLE_XET: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      OMP_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '4'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned evaluation stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
+          python -m pip install --disable-pip-version-check transformers==4.56.2 safetensors==0.6.2 huggingface-hub==0.34.4 accelerate==1.10.1
+
+      - name: Verify frozen rotation contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m py_compile run_057_rule30_neutral_label_interface.py
+          python run_057_rule30_neutral_label_interface.py --self-test > run-057-self-test.json
+
+      - name: Restore immutable actor cache
+        id: actor-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/hf/hub/${{ matrix.cache_dir }}
+          key: hf-${{ matrix.actor_id }}-${{ matrix.revision }}-${{ matrix.sha256 }}
+
+      - name: Resolve exact actor
+        id: actor
+        shell: bash
+        env:
+          HF_HOME: ${{ runner.temp }}/hf
+          MODEL_ID: ${{ matrix.model_id }}
+          MODEL_REVISION: ${{ matrix.revision }}
+          MODEL_SHA256: ${{ matrix.sha256 }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from hashlib import sha256
+          from huggingface_hub import snapshot_download
+          from pathlib import Path
+          import os
+          snapshot=Path(snapshot_download(
+              repo_id=os.environ["MODEL_ID"],
+              revision=os.environ["MODEL_REVISION"],
+              cache_dir=Path(os.environ["HF_HOME"])/"hub",
+              allow_patterns=["*.json","*.model","*.txt","merges.txt","vocab.json","model.safetensors"],
+          ))
+          model_file=snapshot/"model.safetensors"
+          digest=sha256()
+          with model_file.open("rb") as handle:
+              while chunk:=handle.read(8*1024*1024):
+                  digest.update(chunk)
+          if digest.hexdigest()!=os.environ["MODEL_SHA256"]:
+              raise SystemExit("model digest mismatch")
+          with open(os.environ["GITHUB_OUTPUT"],"a",encoding="utf-8") as out:
+              out.write(f"snapshot={snapshot}\n")
+          PY
+
+      - name: Execute neutral-label rotations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python run_057_rule30_neutral_label_interface.py \
+            --model-dir "${{ steps.actor.outputs.snapshot }}" \
+            --model-id "${{ matrix.model_id }}" \
+            --revision "${{ matrix.revision }}" \
+            --model-file "${{ steps.actor.outputs.snapshot }}/model.safetensors" \
+            --expected-sha256 "${{ matrix.sha256 }}" \
+            --output "run-057-${{ matrix.actor_id }}.json" \
+            | tee "run-057-${{ matrix.actor_id }}.log"
+          sha256sum "run-057-${{ matrix.actor_id }}.json"
+
+      - name: Publish actor receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-057-${{ matrix.actor_id }}
+          path: |
+            run-057-self-test.json
+            run-057-${{ matrix.actor_id }}.json
+            run-057-${{ matrix.actor_id }}.log
+          retention-days: 14
