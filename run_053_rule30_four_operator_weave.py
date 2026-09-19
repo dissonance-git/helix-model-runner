@@ -164,39 +164,59 @@ def width4_training() -> tuple[Basin, list[str], list[dict[str, Any]]]:
     return basin, variable, rows
 
 
+def feature_alias(name: str) -> str:
+    """Compact reversible notation for the declared feature language."""
+    suffixes = {
+        ".period<=1": "p1",
+        ".period<=2": "p2",
+        ".period<=4": "p4",
+        ".zero": "z",
+        ".ones": "o",
+        ".even-weight": "e",
+        ".half-repeat": "hr",
+        ".half-complement": "hc",
+    }
+    for suffix, short in suffixes.items():
+        if name.endswith(suffix):
+            return name[:-len(suffix)] + short
+    if name.startswith("D(") and ")=" in name:
+        left, right = name[2:].split(")=", 1)
+        return f"D{left}={right}"
+    if "=~" in name:
+        return name.replace("=~", "~")
+    return name
+
+
+def feature_aliases(variable_features: list[str]) -> dict[str, str]:
+    aliases = {feature_alias(name): name for name in variable_features}
+    if len(aliases) != len(variable_features):
+        raise AssertionError("feature alias collision")
+    return aliases
+
+
 def build_prompt(variable_features: list[str], rows: list[dict[str, Any]]) -> str:
-    # Exact transpose of the same width-4 labeled feature matrix. This changes
-    # transport only: no feature or row is removed and no held-out information
-    # is used. Row ids are local within BRANCH/NONBRANCH groups.
+    # Exact transpose of the same width-4 labeled feature matrix with compact,
+    # reversible semantic aliases. No feature truth value or label is removed.
     branch_rows = [row for row in rows if row["label"] == "BRANCH"]
     nonbranch_rows = [row for row in rows if row["label"] == "NONBRANCH"]
-    compact = {}
+    aliases = feature_aliases(variable_features)
+    full_to_alias = {full: alias for alias, full in aliases.items()}
+    matrix = {}
     for name in variable_features:
-        compact[name] = {
-            "B": [i for i, row in enumerate(branch_rows) if name in row["true_features"]],
-            "N": [i for i, row in enumerate(nonbranch_rows) if name in row["true_features"]],
-        }
+        alias = full_to_alias[name]
+        matrix[alias] = [
+            [i for i, row in enumerate(branch_rows) if name in row["true_features"]],
+            [i for i, row in enumerate(nonbranch_rows) if name in row["true_features"]],
+        ]
     payload = {
-        "task": (
-            "Infer 1 to 3 small Boolean DNF classifiers for BRANCH from exact width-4 evidence. "
-            "Hidden exact widths 8,16,32 will be tested unchanged after your answer."
-        ),
-        "route": [row["operator"] for row in PROGRAM],
-        "route_hint": "DUALIZE ancestry; FACTOR branch/nonbranch; LIFT algebraic features; PROJECT short DNF.",
-        "matrix": {
-            "branch_rows": len(branch_rows),
-            "nonbranch_rows": len(nonbranch_rows),
-            "feature_true_row_ids": compact,
-            "note": "B and N list local row ids where each feature is true. !feature means the complementary rows within that group.",
-        },
-        "output": {"candidates": [{"id": "x", "dnf": [["feature", "!feature"]]}]},
-        "limits": {"candidates": 3, "clauses": 4, "literals_per_clause": 6},
-        "rules": [
-            "DNF=OR of clauses; clause=AND of literals.",
-            "Use feature names exactly; no row ids/state ids in formulas.",
-            "Prefer few clauses/literals that cover every B row and no N row.",
-            "Return JSON only. Do not claim an all-width theorem."
-        ],
+        "task": "Find 1-3 short DNF formulas selecting every B row and no N row. Only width4 is shown; hidden widths 8/16/32 are tested unchanged.",
+        "route": "DUALIZE>FACTOR>LIFT>PROJECT",
+        "legend": "xp1/p2/p4=period(x)<=1/2/4;xz/xo/xe=zero/ones/even-weight;xhr/xhc=half-repeat/half-complement;x=y equality;x~y complement;Dx=y cyclic derivative(x)=y",
+        "rows": {"B": len(branch_rows), "N": len(nonbranch_rows)},
+        "truth": matrix,
+        "truth_format": "alias:[B_true_row_ids,N_true_row_ids]; !alias is complement within each group",
+        "output": {"candidates": [{"id": "x", "dnf": [["alias", "!alias"]]}]},
+        "rules": "DNF=OR of AND clauses. Use aliases exactly. No row/state IDs in formulas. Prefer fewest literals. JSON only. No all-width claim.",
     }
     return json.dumps(payload, separators=(",", ":"), sort_keys=True)
 
@@ -212,7 +232,7 @@ def extract_json_object(text: str) -> dict[str, Any]:
     return value
 
 
-def parse_candidates(text: str, allowed_features: set[str]) -> list[dict[str, Any]]:
+def parse_candidates(text: str, alias_to_full: dict[str, str]) -> list[dict[str, Any]]:
     value = extract_json_object(text)
     raw_candidates = value.get("candidates")
     if not isinstance(raw_candidates, list) or not raw_candidates:
@@ -226,28 +246,35 @@ def parse_candidates(text: str, allowed_features: set[str]) -> list[dict[str, An
         if not candidate_id or not isinstance(dnf, list) or not dnf or len(dnf) > MAX_CLAUSES:
             raise ValueError("candidate id/dnf invalid")
         clauses: list[list[str]] = []
+        alias_clauses: list[list[str]] = []
         for clause in dnf:
             if not isinstance(clause, list) or not clause or len(clause) > MAX_LITERALS_PER_CLAUSE:
                 raise ValueError("candidate clause invalid")
             literals: list[str] = []
+            alias_literals: list[str] = []
             seen: set[str] = set()
             polarity: dict[str, bool] = {}
             for literal in clause:
                 token = str(literal or "").strip()
                 negated = token.startswith("!")
-                base = token[1:] if negated else token
-                if base not in allowed_features:
-                    raise ValueError(f"unknown feature literal: {token}")
-                if token in seen:
+                alias = token[1:] if negated else token
+                if alias not in alias_to_full:
+                    raise ValueError(f"unknown feature alias: {token}")
+                full = alias_to_full[alias]
+                if alias in polarity and polarity[alias] != negated:
+                    raise ValueError(f"self-contradictory clause literal: {alias}")
+                normalized = ("!" if negated else "") + full
+                if normalized in seen:
                     continue
-                if base in polarity and polarity[base] != negated:
-                    raise ValueError(f"self-contradictory clause literal: {base}")
-                polarity[base] = negated
-                seen.add(token)
-                literals.append(token)
+                polarity[alias] = negated
+                seen.add(normalized)
+                alias_literals.append(token)
+                literals.append(normalized)
+            alias_clauses.append(alias_literals)
             clauses.append(literals)
         candidates.append({
             "id": candidate_id,
+            "actor_alias_dnf": alias_clauses,
             "dnf": clauses,
             "mechanism": str(raw.get("mechanism") or "").strip(),
             "source": "actor",
@@ -401,10 +428,12 @@ def self_test() -> dict[str, Any]:
     if len(basin.states) != 42 or len(basin.branch) != 10:
         raise AssertionError((len(basin.states), len(basin.branch)))
     prompt = build_prompt(variable, rows)
+    aliases = feature_aliases(variable)
+    synthetic_alias = sorted(aliases)[0]
     synthetic = json.dumps({
-        "candidates": [{"id": "smoke", "dnf": [[variable[0]]], "mechanism": "smoke"}]
+        "candidates": [{"id": "smoke", "dnf": [[synthetic_alias]], "mechanism": "smoke"}]
     })
-    parsed = parse_candidates(synthetic, set(variable))
+    parsed = parse_candidates(synthetic, aliases)
     return {
         "schema_version": RUN_VERSION,
         "status": "self-test-pass",
@@ -429,13 +458,14 @@ def evaluate(model_dir: str, model_file: str, expected_sha256: str, max_new_toke
         raise SystemExit(f"model digest mismatch: {observed}")
 
     train_basin, variable_features, train_rows = width4_training()
+    aliases = feature_aliases(variable_features)
     prompt = build_prompt(variable_features, train_rows)
     actor_text, generation = actor_generate(model_dir, prompt, max_new_tokens)
     actor_output_sha256 = hashlib.sha256(actor_text.encode()).hexdigest()
     parse_error = None
     actor_candidates: list[dict[str, Any]] = []
     try:
-        actor_candidates = parse_candidates(actor_text, set(variable_features))
+        actor_candidates = parse_candidates(actor_text, aliases)
     except Exception as exc:
         parse_error = f"{type(exc).__name__}: {exc}"
 
@@ -503,7 +533,12 @@ def evaluate(model_dir: str, model_file: str, expected_sha256: str, max_new_toke
             "variable_features": len(variable_features),
             "prompt_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
             "prompt_bytes": len(prompt.encode()),
+            "feature_alias_count": len(aliases),
+            "feature_alias_map_sha256": hashlib.sha256(
+                json.dumps(aliases, sort_keys=True).encode()
+            ).hexdigest(),
         },
+        "feature_aliases": aliases,
         "actor_output_sha256": actor_output_sha256,
         "actor_parse_error": parse_error,
         "actor_candidates": actor_rows,
@@ -530,7 +565,7 @@ def main() -> None:
     parser.add_argument("--model-dir")
     parser.add_argument("--model-file")
     parser.add_argument("--expected-sha256")
-    parser.add_argument("--max-new-tokens", type=int, default=768)
+    parser.add_argument("--max-new-tokens", type=int, default=192)
     parser.add_argument("--output", default="run-053-rule30-four-operator-weave.json")
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
