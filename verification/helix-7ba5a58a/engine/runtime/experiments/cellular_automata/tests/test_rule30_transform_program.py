@@ -7,7 +7,10 @@ from engine.runtime.experiments.cellular_automata.rule30_transform_program impor
     BRANCH_OBLIGATION,
     PROGRAM_OPERATORS,
     PROJECT_TYPE,
+    MECHANISM_BASIS_OPERATORS,
+    MECHANISM_PROGRAM_OPERATORS,
     build_rule30_transform_registry,
+    compile_rule30_branch_mechanism,
     compile_rule30_branch_task,
 )
 
@@ -64,3 +67,27 @@ def test_rule30_compiler_registry_exposes_honest_basis_bindings() -> None:
     assert all(by_name[name]["implemented"] for name in PROGRAM_OPERATORS)
     assert all(by_name[name]["guarded_execution_required"] for name in PROGRAM_OPERATORS)
     assert all(by_name[name]["precondition_verifier_available"] for name in PROGRAM_OPERATORS)
+
+
+def test_rule30_branch_mechanism_reprojection_is_stable_through_width32() -> None:
+    expected_states = {4: 42, 8: 74, 16: 2122, 32: 171786}
+    for width, state_count in expected_states.items():
+        result = compile_rule30_branch_mechanism(width)
+        mechanism = result["mechanism"]
+        program = result["program"]
+
+        assert result["status"] == "compiled-and-verified-branch-mechanism"
+        assert tuple(program["operators"]) == MECHANISM_PROGRAM_OPERATORS
+        assert tuple(program["basis_operators"]) == MECHANISM_BASIS_OPERATORS
+        assert all(step["verification_state"]["status"] == "pass" for step in program["steps"])
+        assert mechanism["state_count"] == state_count
+        assert mechanism["branch_count"] == 10
+        assert mechanism["exceptional_pair_count"] == 2
+        assert mechanism["derivative_chain_count"] == 8
+        assert mechanism["overlap_count"] == 0
+        assert mechanism["false_positive_count"] == 0
+        assert mechanism["false_negative_count"] == 0
+        assert mechanism["mechanism_complete"] is True
+        assert mechanism["mechanism_disjoint"] is True
+        assert mechanism["branch_depth_counts"] == {"3": 2, "4": 4, "5": 4}
+        assert mechanism["maximum_branch_component_period"] == 4
