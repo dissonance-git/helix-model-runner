@@ -31,13 +31,17 @@ DUAL_TYPE = "reverse-zero-tail-ancestry"
 FACTOR_TYPE = "branch-core-plus-forced-exterior"
 LIFT_TYPE = "bounded-algebraic-feature-space"
 PROJECT_TYPE = "small-boolean-dnf-classification-task"
+MECHANISM_TYPE = "branch-mechanism-coordinates"
 
 DUAL_OPERATOR = "rule30-dualize-zero-tail"
 FACTOR_OPERATOR = "rule30-factor-branching"
 LIFT_OPERATOR = "rule30-lift-algebraic-features"
 PROJECT_OPERATOR = "rule30-project-actor-task"
+REPROJECT_OPERATOR = "rule30-reproject-branch-mechanism"
 PROGRAM_OPERATORS = (DUAL_OPERATOR, FACTOR_OPERATOR, LIFT_OPERATOR, PROJECT_OPERATOR)
 BASIS_OPERATORS = ("DUALIZE", "FACTOR", "LIFT", "PROJECT")
+MECHANISM_PROGRAM_OPERATORS = (DUAL_OPERATOR, FACTOR_OPERATOR, LIFT_OPERATOR, REPROJECT_OPERATOR)
+MECHANISM_BASIS_OPERATORS = ("DUALIZE", "FACTOR", "LIFT", "REPROJECT")
 
 
 def state_features(state: tuple[int, int, int, int], n: int) -> dict[str, bool]:
@@ -170,6 +174,7 @@ def _factor(source: Mapping[str, Any]):
         "state": state,
         "is_branch": state in branch_set,
         "zero_basin_outdegree": int(outdegree[state]),
+        "reverse_depth": int(source["depth_by_state"][state]),
     } for state in states)
     return {
         "width": int(source["width"]),
@@ -225,6 +230,7 @@ def _lift(source: Mapping[str, Any]):
         "state": row["state"],
         "is_branch": bool(row["is_branch"]),
         "zero_basin_outdegree": int(row["zero_basin_outdegree"]),
+        "reverse_depth": int(row["reverse_depth"]),
         "features": state_features(row["state"], width),
     } for row in source["rows"])
     feature_names = tuple(sorted(rows[0]["features"])) if rows else ()
@@ -260,6 +266,112 @@ def _verify_lift(source: Mapping[str, Any], target: Mapping[str, Any]) -> dict[s
         if dict(row["features"]) != state_features(state, width):
             return {"status": "fail", "exact": True, "reason": "feature replay mismatch"}
     return _pass(row_count=len(target_rows), feature_count=len(target.get("feature_names") or ()))
+
+
+def _reproject_preconditions(source: Mapping[str, Any]) -> dict[str, Any]:
+    required_features = {"D(a)=c", "b=d", "D(b)=c", "D(c)=d"}
+    rows = tuple(source.get("rows") or ())
+    verified = []
+    if source.get("feature_space_complete") is True:
+        verified.append("complete-algebraic-feature-space")
+    if rows and all(required_features.issubset(set(row.get("features") or {})) for row in rows):
+        verified.append("branch-mechanism-literals-available")
+    return {
+        "status": "pass" if len(verified) == 2 else "fail",
+        "applicable": len(verified) == 2,
+        "exact": True,
+        "verified_preconditions": verified,
+    }
+
+
+def _branch_mechanism_view(source: Mapping[str, Any]) -> dict[str, Any]:
+    rows = []
+    for row in source["rows"]:
+        features = row["features"]
+        exceptional = (not bool(features["D(a)=c"])) and bool(features["b=d"])
+        derivative_chain = bool(features["D(b)=c"]) and (not bool(features["D(c)=d"]))
+        rows.append({
+            "state": row["state"],
+            "reverse_depth": int(row["reverse_depth"]),
+            "is_branch": bool(row["is_branch"]),
+            "exceptional_pair": exceptional,
+            "derivative_chain": derivative_chain,
+            "branch_by_mechanism": exceptional or derivative_chain,
+        })
+    branch_rows = [row for row in rows if row["is_branch"]]
+    exceptional_rows = [row for row in rows if row["exceptional_pair"]]
+    derivative_rows = [row for row in rows if row["derivative_chain"]]
+    overlap_rows = [row for row in rows if row["exceptional_pair"] and row["derivative_chain"]]
+    false_positive = [row for row in rows if row["branch_by_mechanism"] and not row["is_branch"]]
+    false_negative = [row for row in rows if row["is_branch"] and not row["branch_by_mechanism"]]
+    depth_counts = Counter(row["reverse_depth"] for row in branch_rows)
+    max_branch_period = max(
+        (
+            max(word_period(word, int(source["width"])) for word in row["state"])
+            for row in branch_rows
+        ),
+        default=0,
+    )
+    return {
+        "width": int(source["width"]),
+        "state_count": len(rows),
+        "branch_count": len(branch_rows),
+        "exceptional_pair_count": len(exceptional_rows),
+        "derivative_chain_count": len(derivative_rows),
+        "overlap_count": len(overlap_rows),
+        "false_positive_count": len(false_positive),
+        "false_negative_count": len(false_negative),
+        "branch_depth_counts": {str(depth): int(count) for depth, count in sorted(depth_counts.items())},
+        "maximum_reverse_depth": max((row["reverse_depth"] for row in rows), default=0),
+        "maximum_branch_component_period": max_branch_period,
+        "rows": tuple(rows),
+        "mechanism_complete": not false_positive and not false_negative,
+        "mechanism_disjoint": not overlap_rows,
+    }
+
+
+def _reproject(source: Mapping[str, Any]):
+    target = _branch_mechanism_view(source)
+    return target, {
+        "target_id": f"rule30:branch-mechanism:w{source['width']}",
+        "discarded_information": [
+            "feature columns outside D(a)=c, b=d, D(b)=c, and D(c)=d",
+        ],
+        "introduced_information": [
+            "exceptional-pair coordinate",
+            "derivative-chain coordinate",
+            "exact branch-equivalence diagnostic",
+        ],
+        "inverse_or_recovery_route": "recompute-complete-feature-space-from-retained-state-identity",
+        "expected_observable": (
+            "within the exact zero-tail basin, branch iff exceptional_pair OR derivative_chain"
+        ),
+        "peak_intermediate_size": len(target["rows"]),
+    }
+
+
+def _verify_reproject(source: Mapping[str, Any], target: Mapping[str, Any]) -> dict[str, Any]:
+    replay = _branch_mechanism_view(source)
+    exact_fields = (
+        "width", "state_count", "branch_count", "exceptional_pair_count",
+        "derivative_chain_count", "overlap_count", "false_positive_count",
+        "false_negative_count", "branch_depth_counts", "maximum_reverse_depth",
+        "maximum_branch_component_period", "rows", "mechanism_complete",
+        "mechanism_disjoint",
+    )
+    ok = all(target.get(field) == replay.get(field) for field in exact_fields)
+    ok = ok and target.get("mechanism_complete") is True and target.get("mechanism_disjoint") is True
+    return _pass(
+        branch_count=target.get("branch_count"),
+        exceptional_pair_count=target.get("exceptional_pair_count"),
+        derivative_chain_count=target.get("derivative_chain_count"),
+        branch_depth_counts=target.get("branch_depth_counts"),
+        maximum_branch_component_period=target.get("maximum_branch_component_period"),
+    ) if ok else {
+        "status": "fail",
+        "exact": True,
+        "reason": "branch-mechanism reprojection does not exactly classify the source basin",
+    }
 
 
 def _project_preconditions(source: Mapping[str, Any]) -> dict[str, Any]:
@@ -413,6 +525,15 @@ def build_rule30_transform_registry() -> TransformationRegistry:
         cheapest_falsifier="single feature row replay mismatch",
     ))
     registry.register(OperatorSpec(
+        REPROJECT_OPERATOR, (LIFT_TYPE,), MECHANISM_TYPE,
+        ("complete-algebraic-feature-space", "branch-mechanism-literals-available"),
+        (BRANCH_OBLIGATION,), basis_operator="REPROJECT",
+        implementation=_reproject, verifier=_verify_reproject,
+        precondition_verifier=_reproject_preconditions,
+        certificate_requirements=("exact branch equivalence", "disjoint mechanism partition"),
+        cheapest_falsifier="one basin state misclassified by the two mechanism coordinates",
+    ))
+    registry.register(OperatorSpec(
         PROJECT_OPERATOR, (LIFT_TYPE,), PROJECT_TYPE,
         ("complete-algebraic-feature-space", "exact-feature-rows", "width-4-training-scope"),
         (BRANCH_OBLIGATION,), basis_operator="PROJECT",
@@ -457,6 +578,41 @@ def compile_rule30_branch_task() -> dict[str, Any]:
             "No held-out width label is computed or exposed by this artifact.",
             "Held-out evaluation remains a separate Helix/Helix Model judgment step.",
             "Finite width-4 compilation does not establish an all-dyadic theorem.",
+        ],
+    }
+
+
+def compile_rule30_branch_mechanism(width: int) -> dict[str, Any]:
+    """Compile the exact basin into the two-coordinate branch mechanism view."""
+    if width < 4 or width % 2:
+        raise ValueError("width must be an even integer at least 4")
+    source = {
+        "width": int(width),
+        "semantics": "rule30-right-history",
+        "question": "Why is every exact zero-tail-basin fork confined to the small branch core?",
+    }
+    target, program = execute_transform_program(
+        build_rule30_transform_registry(),
+        MECHANISM_PROGRAM_OPERATORS,
+        source,
+        source_id=f"rule30:forward-history:w{width}",
+        source_type=SOURCE_TYPE,
+        required_obligations=(BRANCH_OBLIGATION,),
+        provenance={
+            "owner": "engine.runtime.experiments.cellular_automata.rule30_transform_program",
+            "source_exact_owner": "engine.runtime.experiments.cellular_automata.rule30_077_zero_tail_basin",
+            "finite_candidate_source": "dissonance-git/helix-model:runs/053-rule30-four-operator-weave/Result.json",
+        },
+    )
+    return {
+        "schema_version": PROGRAM_VERSION,
+        "status": "compiled-and-verified-branch-mechanism",
+        "mechanism": target,
+        "program": program,
+        "claim_boundary": [
+            "The two-coordinate branch identity is established only for the exact finite width executed.",
+            "Matching results at several widths do not establish the all-dyadic theorem.",
+            "The reprojection is fail-closed: a single false positive, false negative, or overlap rejects the exact transform.",
         ],
     }
 
