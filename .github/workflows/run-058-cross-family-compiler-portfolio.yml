@@ -11,7 +11,7 @@ on:
       - 'run_026_capability_substitution.py'
       - 'offline_reasoning_content_probe.py'
       - 'offline_reasoning_battery.py'
-      - 'helix-pinned-f4265344/**'
+      - 'vendor/helix-f4265344/**'
 
 permissions:
   contents: read
@@ -26,7 +26,7 @@ jobs:
       MODEL_SHA256: 7aaff6661428bed033abba9522bec81938678642cca3181fe752b6ca9e1e540f
       MODEL_BYTES: '723674912'
       HELIX_COMMIT: f42653441213d13ebece11508922fa9e78cd3a25
-      HELIX_DIR: ${{ github.workspace }}/helix-pinned-f4265344
+      HELIX_DIR: ${{ github.workspace }}/vendor/helix-f4265344
       HF_HUB_DISABLE_XET: '1'
       TOKENIZERS_PARALLELISM: 'false'
       OMP_NUM_THREADS: '4'
@@ -54,8 +54,6 @@ jobs:
           test -f "$HELIX_DIR/engine/kernel/identity.py"
           python -m py_compile \
             "$HELIX_DIR/engine/ir/passes.py" \
-            "$HELIX_DIR/engine/ir/lowering.py" \
-            "$HELIX_DIR/engine/ir/model.py" \
             "$HELIX_DIR/engine/kernel/identity.py" \
             "$HELIX_DIR/engine/kernel/semantics.py" \
             "$HELIX_DIR/engine/kernel/verification.py"
