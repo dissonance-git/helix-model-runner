@@ -1,0 +1,118 @@
+name: Helix Model Run 062 - Helix memory compiler shadow
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/run-062-helix-memory-shadow-compiler.yml'
+      - 'run_062_helix_memory_shadow_compiler.py'
+      - 'run-062-helix-memory-shadow-suite.json'
+      - 'run_026_capability_substitution.py'
+      - 'run_028_canonical_representation.py'
+      - 'vendor/helix-f4265344/**'
+
+permissions:
+  contents: read
+
+jobs:
+  helix-memory-shadow:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ACTOR_MODEL: HuggingFaceTB/SmolLM2-360M
+      MODEL_REVISION: f8027fd0eaeea54caa13c31d31b9fdc459c38b49
+      MODEL_SHA256: 7aaff6661428bed033abba9522bec81938678642cca3181fe752b6ca9e1e540f
+      MODEL_BYTES: '723674912'
+      HELIX_DIR: ${{ github.workspace }}/vendor/helix-f4265344
+      HF_HUB_DISABLE_XET: '1'
+      TOKENIZERS_PARALLELISM: 'false'
+      OMP_NUM_THREADS: '4'
+      MKL_NUM_THREADS: '4'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install pinned evaluation stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
+          python -m pip install --disable-pip-version-check transformers==4.56.2 safetensors==0.6.2 huggingface-hub==0.34.4 accelerate==1.10.1
+
+      - name: Verify compiler and frozen public suite
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sha256sum "$HELIX_DIR/engine/ir/passes.py" | cut -d' ' -f1)" = "cf30f43483e9cef50ce3760c290c8243d44aacee1e56745b6134494831855e00"
+          python -m py_compile run_062_helix_memory_shadow_compiler.py
+          python run_062_helix_memory_shadow_compiler.py             --helix-dir "$HELIX_DIR"             --suite run-062-helix-memory-shadow-suite.json             --self-test | tee run-062-self-test.json
+          python - <<'PY'
+          import json
+          p=json.load(open("run-062-helix-memory-shadow-suite.json"))
+          blob=json.dumps(p,sort_keys=True).casefold()
+          forbidden=("required_tier","stored_importance_status","importance_status","correctness_status","novelty_status","impact_tier")
+          leaked=[k for k in forbidden if k in blob]
+          if leaked:
+              raise SystemExit("private assessment leakage in public suite: "+",".join(leaked))
+          print("public suite private-field scan: PASS")
+          PY
+
+      - name: Restore immutable actor cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/hf/hub/models--HuggingFaceTB--SmolLM2-360M
+          key: hf-smollm2-360m-${{ env.MODEL_REVISION }}-${{ env.MODEL_SHA256 }}
+
+      - name: Resolve exact frozen actor remotely
+        id: actor
+        shell: bash
+        env:
+          HF_HOME: ${{ runner.temp }}/hf
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from hashlib import sha256
+          from huggingface_hub import snapshot_download
+          from pathlib import Path
+          import os
+          snapshot=Path(snapshot_download(
+              repo_id=os.environ["ACTOR_MODEL"],
+              revision=os.environ["MODEL_REVISION"],
+              cache_dir=Path(os.environ["HF_HOME"])/"hub",
+              allow_patterns=["*.json","*.model","*.txt","merges.txt","vocab.json","model.safetensors"],
+          ))
+          model_file=snapshot/"model.safetensors"
+          if model_file.stat().st_size != int(os.environ["MODEL_BYTES"]):
+              raise SystemExit("model byte mismatch")
+          h=sha256()
+          with model_file.open("rb") as f:
+              while chunk:=f.read(8*1024*1024): h.update(chunk)
+          if h.hexdigest()!=os.environ["MODEL_SHA256"]:
+              raise SystemExit("model digest mismatch")
+          with open(os.environ["GITHUB_OUTPUT"],"a",encoding="utf-8") as out:
+              out.write(f"snapshot={snapshot}\n")
+          print("actor verified")
+          PY
+
+      - name: Freeze public shadow predictions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python run_062_helix_memory_shadow_compiler.py             --helix-dir "$HELIX_DIR"             --suite run-062-helix-memory-shadow-suite.json             --model-dir "${{ steps.actor.outputs.snapshot }}"             --model-file "${{ steps.actor.outputs.snapshot }}/model.safetensors"             --expected-sha256 "$MODEL_SHA256"             --output run-062-helix-memory-shadow-compiler.json             | tee run-062-helix-memory-shadow-compiler.log
+          sha256sum run-062-helix-memory-shadow-compiler.json
+
+      - name: Publish public predictions only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-062-helix-memory-shadow-compiler
+          path: |
+            run-062-self-test.json
+            run-062-helix-memory-shadow-compiler.json
+            run-062-helix-memory-shadow-compiler.log
+          if-no-files-found: warn
+          retention-days: 14
