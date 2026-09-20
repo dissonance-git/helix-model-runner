@@ -11,6 +11,7 @@ on:
       - 'run_026_capability_substitution.py'
       - 'offline_reasoning_content_probe.py'
       - 'offline_reasoning_battery.py'
+      - 'helix-pinned-f4265344/**'
 
 permissions:
   contents: read
@@ -25,6 +26,7 @@ jobs:
       MODEL_SHA256: 7aaff6661428bed033abba9522bec81938678642cca3181fe752b6ca9e1e540f
       MODEL_BYTES: '723674912'
       HELIX_COMMIT: f42653441213d13ebece11508922fa9e78cd3a25
+      HELIX_DIR: ${{ github.workspace }}/helix-pinned-f4265344
       HF_HUB_DISABLE_XET: '1'
       TOKENIZERS_PARALLELISM: 'false'
       OMP_NUM_THREADS: '4'
@@ -44,21 +46,30 @@ jobs:
           python -m pip install --disable-pip-version-check --index-url https://download.pytorch.org/whl/cpu torch==2.8.0
           python -m pip install --disable-pip-version-check transformers==4.56.2 safetensors==0.6.2 huggingface-hub==0.34.4 accelerate==1.10.1
 
-      - name: Resolve exact Helix compiler source
+      - name: Verify pinned Helix compiler snapshot
         shell: bash
         run: |
           set -euo pipefail
-          git clone --filter=blob:none https://gitlab.com/dissonance-git/Helix.git "$RUNNER_TEMP/helix"
-          git -C "$RUNNER_TEMP/helix" checkout --detach "$HELIX_COMMIT"
-          test "$(git -C "$RUNNER_TEMP/helix" rev-parse HEAD)" = "$HELIX_COMMIT"
-          sha256sum "$RUNNER_TEMP/helix/engine/ir/passes.py"
+          test -f "$HELIX_DIR/engine/ir/passes.py"
+          test -f "$HELIX_DIR/engine/kernel/identity.py"
+          python -m py_compile \
+            "$HELIX_DIR/engine/ir/passes.py" \
+            "$HELIX_DIR/engine/ir/lowering.py" \
+            "$HELIX_DIR/engine/ir/model.py" \
+            "$HELIX_DIR/engine/kernel/identity.py" \
+            "$HELIX_DIR/engine/kernel/semantics.py" \
+            "$HELIX_DIR/engine/kernel/verification.py"
+          sha256sum \
+            "$HELIX_DIR/engine/ir/passes.py" \
+            "$HELIX_DIR/engine/kernel/identity.py"
+          printf '%s\n' "$HELIX_COMMIT" > run-058-helix-source-commit.txt
 
       - name: Verify frozen experiment before actor acquisition
         shell: bash
         run: |
           set -euo pipefail
           python -m py_compile             offline_reasoning_battery.py             offline_reasoning_content_probe.py             run_026_capability_substitution.py             run_028_canonical_representation.py             run_039_exact_representation_operators.py             run_058_cross_family_compiler_portfolio.py
-          python run_058_cross_family_compiler_portfolio.py             --helix-dir "$RUNNER_TEMP/helix"             --self-test | tee run-058-self-test.json
+          python run_058_cross_family_compiler_portfolio.py             --helix-dir "$HELIX_DIR"             --self-test | tee run-058-self-test.json
           sha256sum             run_058_cross_family_compiler_portfolio.py             run_039_exact_representation_operators.py             run-058-self-test.json
 
       - name: Restore immutable actor cache
@@ -137,7 +148,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python run_058_cross_family_compiler_portfolio.py             --helix-dir "$RUNNER_TEMP/helix"             --model-dir "${{ steps.actor.outputs.snapshot }}"             --model-file "${{ steps.actor.outputs.snapshot }}/model.safetensors"             --expected-sha256 "$MODEL_SHA256"             --seeds 20261221,20261222             --cases-per-family 2             --output run-058-cross-family-compiler-portfolio.json             | tee run-058-cross-family-compiler-portfolio.log
+          python run_058_cross_family_compiler_portfolio.py             --helix-dir "$HELIX_DIR"             --model-dir "${{ steps.actor.outputs.snapshot }}"             --model-file "${{ steps.actor.outputs.snapshot }}/model.safetensors"             --expected-sha256 "$MODEL_SHA256"             --seeds 20261221,20261222             --cases-per-family 2             --output run-058-cross-family-compiler-portfolio.json             | tee run-058-cross-family-compiler-portfolio.log
           sha256sum run-058-cross-family-compiler-portfolio.json run-058-transport.json
 
       - name: Publish compact evidence only
