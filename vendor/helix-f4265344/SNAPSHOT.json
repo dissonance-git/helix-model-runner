@@ -1,0 +1,13 @@
+{
+  "source_repository": "dissonance-git/helix",
+  "source_commit": "f42653441213d13ebece11508922fa9e78cd3a25",
+  "exact_files": [
+    "engine/ir/passes.py",
+    "engine/kernel/__init__.py",
+    "engine/kernel/identity.py",
+    "engine/kernel/semantics.py",
+    "engine/kernel/verification.py"
+  ],
+  "passes_git_blob_sha1": "47bc3bf2322fbddd8b6aa64161b848426348e437",
+  "boundary": "engine/ir/passes.py and engine/kernel dependencies copied byte-for-byte from canonical GitLab; package wrappers are runner-only transport scaffolding."
+}
