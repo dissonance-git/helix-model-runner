@@ -1,0 +1,602 @@
+{
+  "schema_version": "helix-model-shadow-memory-suite-001.0",
+  "source_repository": "dissonance-git/Helix",
+  "source_commit": "0bfae34de45ed75a4eadaef02b10aa3c01313a80",
+  "research_generation_sha256": "d3230df292bcfb73f70d055fd8c5bcac0f0f5a00e58aa2bae215e4c37729a394",
+  "cases": [
+    {
+      "case_id": "helix-memory-01",
+      "visible_consequence": {
+        "title": "Direct boundary-chamber enumeration exceeds its frozen cap on one side-five active set",
+        "exact_result": "For active rows [2,8,12,23,26] and target normal IDs [0,1,2,12,17], exact rational linear enumeration produced 10,000 distinct realizable incident-basis patterns before hitting its frozen cap. A separately solved blocking query produced a distinct exact 10,001st pattern, proving the enumeration was incomplete. The domain has 1,525 candidate row sets, 519 nonsingular incident bases, and 561 unoriented event hyperplanes.",
+        "contribution": "Rejects direct raw chamber listing as a scalable route to the side-five proof frontier and concentrates the next attack on symbolic universalization of the 011 shared table.",
+        "mechanism": "Every vertex in the five incident two-faces is represented by a six-row basis containing at least four selected active rows. Exact adjugate substitution turns feasibility into boundary-linear predicates. Z3 enumerates rational predicate patterns, while independent integer and Fraction replay verifies the witnesses and hashes.",
+        "limitations": [
+          "The lower bound is not a complete chamber count.",
+          "The 10,001 patterns are not counterexamples and were not all reconstructed as decorated neighborhoods.",
+          "The 011 shared table was not tested against every pattern.",
+          "The result does not prove or refute five-part KTT positivity.",
+          "The inherited Berline--Vergne kernel still requires independent specialist implementation and review.",
+          "Novelty, priority, and external acceptance remain unresolved."
+        ],
+        "next_actions": [
+          "Test whether the 011 correction table obeys exact cone-subdivision/additivity identities.",
+          "Seek a symbolic rank-four face potential or valuation rule making polygon compatibility automatic.",
+          "Stop immediately on an exact violated identity and preserve the counterexample.",
+          "Independently reimplement and specialist-audit the Berline--Vergne kernel before external promotion."
+        ],
+        "result_type": "barrier_theorem",
+        "mathematical_status": "exact_bounded_proof_mechanism_barrier"
+      }
+    },
+    {
+      "case_id": "helix-memory-02",
+      "visible_consequence": {
+        "title": "Exact atomic side-five cone atlas and negative minimal-closure repair census",
+        "exact_result": "All 80,730 five-normal subsets were classified: 52,680 have rank five, with 50,283 positive and 2,397 negative exact BV weights. The negative cells expand to 3,606 original-row cases and 2,013 minimal forced slack closures. Of 1,284 distinct realized minimal-closure cone types, 90 are negative, minimum -347/109824. Every negative type has one exact locally repairable full-dimensional representative; 80 repairs use one polygon row and 10 use several. All 86 distinct full witness hives have positive linear coefficient, minimum 133/20.",
+        "contribution": "Builds the complete exact rank-five atomic side-five normal-cone census and follows every negative atomic seed through original-row minimal closure, exact realization, complete-cone sign, and representative local repair.",
+        "mechanism": "Exact signed-minor kernels enumerate all rank-five atomic cones; exact lattice star subdivisions evaluate nonsaturated BV weights; nonnegative rational rhombus-slack relations compute forced closures; exact partition and interior witnesses establish realizability; polygon boundary rows provide local nonnegative representatives without changing length pairings.",
+        "limitations": [
+          "The atomic census is complete, but minimal forced closures do not enumerate every optional larger active-row superset or two-face-incidence type.",
+          "Representative local repair does not prove a compatible global certificate or five-part KTT positivity.",
+          "The 86 positive full witness hives are exact examples, not exhaustive partition coverage.",
+          "The BV kernel is reused from LR-R5-SQUARE-BV-005 and still requires an independent specialist implementation.",
+          "Novelty, publication priority, and specialist acceptance remain unresolved."
+        ],
+        "next_actions": [
+          "Enumerate every optional facial active-row superset and two-face-incidence type above the minimal closures.",
+          "Assemble the complete global codimension-five balancing operator and seek a compatible nonnegative-coset certificate or exact realizable Farkas witness.",
+          "Independently reimplement and specialist-audit the BV kernel before external promotion."
+        ],
+        "result_type": "exact_classification",
+        "mathematical_status": "exact_atomic_classification_and_bounded_repair_census"
+      }
+    },
+    {
+      "case_id": "helix-memory-03",
+      "visible_consequence": {
+        "title": "Realizable negative Berline-Vergne edge in a five-part hive",
+        "exact_result": "The full-dimensional side-five hive for lambda=(16,13,10,8,5), mu=(12,8,4,2,0), nu=(11,8,5,2,0) has a genuine saturated edge cone with Berline-Vergne value -347/109824. Its complete stretching polynomial remains coefficientwise positive with linear coefficient 47/6. Therefore universal edgewise BV positivity is false, while five-part KTT positivity remains open.",
+        "contribution": "Supersedes the edgewise-sign proof frontier with an exact full-dimensional hive edge that is locally negative while globally compensated.",
+        "mechanism": "Five independent saturated rhombus normals are exactly tight on a real edge of a strict full-dimensional hive. Their local BV value is negative, but the other edges compensate in the complete linear coefficient.",
+        "limitations": [
+          "The result is a proof-route obstruction, not a KTT counterexample or proof.",
+          "The BV computation reuses the exact evaluator from LR-R5-SQUARE-BV-005 and still requires an independent specialist implementation.",
+          "The global balancing or hive Todd-effectivity question remains open.",
+          "Targeted search supports only priority_uncertain; publication priority and specialist acceptance are unresolved."
+        ],
+        "next_actions": [
+          "Construct the exact codimension-five hive balancing matrix and rational nonnegative-coset or Farkas certificate.",
+          "Use this witness as a negative control for every proposed global compensation proof.",
+          "Obtain an independent BV implementation and specialist review before any external claim."
+        ],
+        "result_type": "barrier_theorem",
+        "mathematical_status": "exact_bounded_barrier_theorem"
+      }
+    },
+    {
+      "case_id": "helix-memory-04",
+      "visible_consequence": {
+        "title": "Exact shared nonnegative balancing across reconstructed side-five negative neighborhoods",
+        "exact_result": "All 122 deterministic exact negative neighborhoods reconstructed from the complete 010 atlas reduce to 587 rational quotient equations on 1,269 globally shared complete-cone variables. One exact solution is nonnegative everywhere, with 562 positive weights and 707 zeros; its stream hash is 942ae60d2f2b5f4e2286a384ca3b94e48e255b15f13e24a01202793e3e198c1f.",
+        "contribution": "Eliminates observed global incompatibility among the complete set of deterministic negative side-five neighborhoods by assigning one exact repaired weight to each repeated cone type.",
+        "mechanism": "Exact right-kernel elimination quotients each local polygon rowspace, and identical complete cone types share one global variable. A rational active-face reconstruction supplies one simultaneous nonnegative representative and an independent checker replays all equations.",
+        "limitations": [
+          "The 122 deterministic neighborhoods are not proved to exhaust every boundary chamber or decorated incidence type.",
+          "The result does not prove five-part KTT positivity or an unrestricted Littlewood--Richardson statement.",
+          "The Berline--Vergne kernel is inherited and still requires a specialist-independent implementation.",
+          "Novelty, priority, publication value, and specialist acceptance remain unresolved."
+        ],
+        "next_actions": [
+          "Prove boundary-chamber completeness or derive a symbolic cone-weight formula covering every decorated incidence type.",
+          "Attack the route with one exact omitted-chamber search rather than undirected enumeration.",
+          "Independently reimplement and specialist-audit the BV kernel before external promotion."
+        ],
+        "result_type": "bounded_compensation_theorem",
+        "mathematical_status": "exact_bounded_global_compatibility_theorem"
+      }
+    },
+    {
+      "case_id": "helix-memory-05",
+      "visible_consequence": {
+        "title": "Complete optional side-five active-row atlas and bounded multi-boundary repair census",
+        "exact_result": "Every negative atomic original-row seed lies below one of 8,904 exact closed rank-five active-row sets, all full-dimensionally realizable. They yield 6,699 complete normal-cone types: 6,609 positive and 90 negative, minimum -347/109824. The 90 negative types correspond to exactly 90 negative active-row sets. Across 122 exact boundary-neighborhood instances, including multiple decorated incidence signatures for 27 active sets, all repair exactly; 108 use one polygon row and 14 use several.",
+        "contribution": "Closes the optional active-row superset gap for the fixed side-five system and extends exact local repair tests across every negative active-row set and multiple deterministic boundary witnesses.",
+        "mechanism": "Exact slack-face closure and rank-filtered fixed-point traversal enumerate every admissible active-row superset. Exact complete-cone BV values isolate all negative types. Exact boundary objectives, vertex and face reconstruction, polygon closure rows, and rational rowspace shifts test changing local neighborhoods without changing valid length pairings.",
+        "limitations": [
+          "The active-row atlas is complete, but the deterministic boundary objectives do not exhaust every boundary chamber or decorated incidence type.",
+          "Local repairability does not prove one globally compatible repair across an arbitrary full hive or five-part KTT positivity.",
+          "The Berline--Vergne kernel is reused and still requires an independent specialist implementation.",
+          "Novelty, publication priority, and specialist acceptance remain unresolved."
+        ],
+        "next_actions": [
+          "Classify the boundary-parameter chambers for the 90 negative active-row sets or prove one symbolic repair lemma covering all incidence types.",
+          "Assemble the complete global codimension-five balancing operator and seek an exact compatible nonnegative-coset certificate or realizable Farkas obstruction.",
+          "Independently reimplement and specialist-audit the BV kernel before external promotion."
+        ],
+        "result_type": "exact_classification",
+        "mathematical_status": "exact_optional_superset_classification_and_bounded_repair_census"
+      }
+    },
+    {
+      "case_id": "helix-memory-06",
+      "visible_consequence": {
+        "title": "Exact local balancing neutralizes the realizable negative five-part hive edge",
+        "exact_result": "The unique negative edge in the 007 hive lies in five two-faces whose union has seventeen edges. All sixteen other local BV weights are positive. A single exact coordinate row of one quadrilateral boundary relation, scaled by 347/109824, moves the negative weight from -347/109824 to zero while every affected neighbor remains positive and the actual weighted sum remains 4893491/27675648.",
+        "contribution": "Advances the failed edgewise-sign route to the first exact local balancing certificate around the realizable negative edge.",
+        "mechanism": "Directed edge vectors close around each two-face. Adding a rational multiple of a true closure row to the local BV weight vector preserves every valid length pairing; one quadrilateral row exactly cancels the sole negative entry without creating another negative entry.",
+        "limitations": [
+          "The certificate covers one closed neighborhood, not all realizable side-five edge types.",
+          "It does not prove full-dimensional side-five, lower-dimensional side-five, HTE, or unrestricted KTT positivity.",
+          "The BV kernel is reused from LR-R5-SQUARE-BV-005 and still requires independent specialist implementation.",
+          "Novelty, publication priority, and specialist acceptance remain unresolved."
+        ],
+        "next_actions": [
+          "Enumerate the complete realizable side-five edge-type atlas and its two-face incidence types.",
+          "Test whether the one-row or bounded-local repair pattern extends to every negative edge orbit.",
+          "Assemble the exact global codimension-five balancing operator and seek a complete nonnegative-coset certificate or realizable Farkas obstruction.",
+          "Obtain an independent BV implementation and specialist review before any external claim."
+        ],
+        "result_type": "bounded_compensation_theorem",
+        "mathematical_status": "exact_bounded_compensation_theorem"
+      }
+    },
+    {
+      "case_id": "helix-memory-07",
+      "visible_consequence": {
+        "title": "Affine-pair bridge and counterexamples to universal 5-CDC shortcuts",
+        "exact_result": "The affine-pair matching condition is sufficient for a 5-cycle double cover, but the labeling-universal version fails on R_2 and the flow-universal version fails on R_4; the remaining graph-level existence statement is equivalent to the original conjecture.",
+        "contribution": "Identified the exact matching/4-flow interface between the new affine-pair Cycle Double Cover construction and 5-cycle double covers, proved the weakest existence form equivalent to the target, and produced deterministic counterexamples to two stronger universal shortcuts.",
+        "mechanism": null,
+        "limitations": [
+          "The 5-Cycle Double Cover Conjecture remains open.",
+          "The weakest surviving statement is an equivalent reformulation.",
+          "External specialist review and historical-priority confirmation are pending."
+        ],
+        "next_actions": [],
+        "result_type": "negative_result",
+        "mathematical_status": "refuted"
+      }
+    },
+    {
+      "case_id": "helix-memory-08",
+      "visible_consequence": {
+        "title": "Certified 51-digit lower bound for Erdos Problem 287 counterexamples",
+        "exact_result": "Any counterexample to Erdos Problem 287 has k >= 161754739109359353688550495792648157093930437125548 and largest denominator above 374144419156686863575215759373965031261381504265851.",
+        "contribution": "Extended and deterministically certified the good-prime-chain method, added exact small-boundary exhaustion and rational conversion from the largest-denominator range to a 51-digit lower bound on k.",
+        "mechanism": null,
+        "limitations": [
+          "The full conjecture remains open.",
+          "The method is a finite extension of an existing good-prime-chain approach.",
+          "External number-theory review and refreshed priority checking are pending."
+        ],
+        "next_actions": [],
+        "result_type": "bound",
+        "mathematical_status": "proved_under_declared_conventions"
+      }
+    },
+    {
+      "case_id": "helix-memory-09",
+      "visible_consequence": {
+        "title": "Adjacent composite obstruction and doubled certified Erdos 287 bound",
+        "exact_result": "Any counterexample to Erdos Problem 287 has k >= 564934997548750587788804086285113740265850557500522 and largest denominator above 1306714583343738346015703169027740722565074278457843; the decisive adjacent pair is 2Q and 19R with both Q and R exactly certified prime.",
+        "contribution": "Generalized the denominator obstruction from prime centers to prime-power-dominated composite integers, proved that two consecutive forbidden integers exclude a whole ceiling interval, and certified an adjacent composite pair that doubles the prior finite lower bound.",
+        "mechanism": "deterministic_certificate_pass",
+        "limitations": [
+          "The full conjecture remains open.",
+          "The broad idea of using consecutive integers with large prime factors was already suggested publicly.",
+          "The propagation-closure mechanism is experimentally supported but unproved.",
+          "External number-theory specialist review is pending."
+        ],
+        "next_actions": [
+          "Formalize the valuation-propagation closure theorem.",
+          "Search for closure certificates not reducible to direct adjacent large-factor pairs.",
+          "Seek a structural proof that closure produces adjacent forbidden integers for every ceiling.",
+          "Obtain external number-theory review before public novelty claims."
+        ],
+        "result_type": "theorem_and_finite_bound",
+        "mathematical_status": "proved_under_declared_conventions"
+      }
+    },
+    {
+      "case_id": "helix-memory-10",
+      "visible_consequence": {
+        "title": "Ten-wall adjacent-composite chain and 53-digit lower bound",
+        "exact_result": "Any counterexample to Erdos Problem 287 has k >= 10005107312144123897741454250491455056792590071551510 and largest denominator above 23142166248196730858080330141623192495292808881792395.",
+        "contribution": "Chained ten additional adjacent-composite walls with exact overlap, supplied a 237-node recursive Lucas certificate graph, and raised the deterministic finite barrier by a factor of about 17.71.",
+        "mechanism": "deterministic_certificate_pass",
+        "limitations": [
+          "The full conjecture remains open.",
+          "The ten-wall chain does not prove another wall must exist.",
+          "Historical priority and external number-theory review are pending."
+        ],
+        "next_actions": [
+          "Seek a self-extension theorem for n=2q, n+1=3r walls.",
+          "Generalize the wall family to controlled almost-prime factors.",
+          "Continue the global prime-cancellation and propagation proof route.",
+          "Obtain external specialist review before public novelty claims."
+        ],
+        "result_type": "deterministic_finite_bound",
+        "mathematical_status": "proved_under_declared_conventions"
+      }
+    },
+    {
+      "case_id": "helix-memory-11",
+      "visible_consequence": {
+        "title": "Bounded-cofactor obstruction and stronger certified Erdos 287 bound",
+        "exact_result": "Any counterexample to Erdos Problem 287 has k >= 282467498774375293894402043142556870132925278750427 and largest denominator above 653357291671869173007851584513870361282537139229303; the interval obstruction applies more generally when p±1=aq and the declared reciprocal-subset condition holds.",
+        "contribution": "Generalized the cofactor-two prime obstruction to an exact bounded-cofactor theorem, supplied a uniform lcm-scaled sufficient criterion, and used a deterministically certified a=4 node to extend the finite counterexample barrier.",
+        "mechanism": "prime-adic maximal-valuation argument; bounded reciprocal-subset obstruction; uniform lcm-scaled magnitude criterion; recursive Lucas primality certificates; exact rational bound conversion; live source and priority audit",
+        "limitations": [
+          "The full conjecture remains open.",
+          "Historical priority for the bounded-cofactor theorem is unconfirmed.",
+          "No infinite supply or self-extending chain of admissible nodes is proved.",
+          "External number-theory specialist review is pending."
+        ],
+        "next_actions": [],
+        "result_type": "bound",
+        "mathematical_status": "proved_under_declared_conventions"
+      }
+    },
+    {
+      "case_id": "helix-memory-12",
+      "visible_consequence": {
+        "title": "Infinite adjacent-composite walls from prime clusters",
+        "exact_result": "For every fixed real rho with 1<rho<e, infinitely many integers X exclude every possible largest denominator M in X+2 <= M <= rho X for a distinct unit-fraction representation of 1 with all consecutive denominator gaps at most two.",
+        "contribution": "Combined arbitrarily large gcd-distance coefficient sets, Maynard's prime-cluster theorem, and the Helix bounded-cofactor obstruction to prove an unconditional infinite supply of adjacent composite walls; strengthened each sufficiently large wall to every fixed multiplicative reach below e.",
+        "mechanism": "elementary_reduction_pass_external_theorem_cited",
+        "limitations": [
+          "Erdos Problem 287 remains open.",
+          "Maynard's theorem guarantees infinitely many wall events but not enough multiplicative density for complete overlap.",
+          "The special coefficient construction and broad adjacent-large-factor idea have known prior components.",
+          "Historical priority for the synthesis and external specialist review are pending."
+        ],
+        "next_actions": [
+          "Seek a quantitative multiplicative wall-spacing theorem.",
+          "Generalize the obstruction from prime-dominated to controlled almost-prime walls.",
+          "Formalize the elementary reduction in Lean.",
+          "Obtain number-theory specialist review and broader priority search."
+        ],
+        "result_type": "infinite_theorem_reduction",
+        "mathematical_status": "proved_under_declared_conventions"
+      }
+    },
+    {
+      "case_id": "helix-memory-13",
+      "visible_consequence": {
+        "title": "Fresh implication resolving Graffiti 295",
+        "exact_result": "For connected simple graphs of order n >= 2 and girth at least five, n_+(D) <= n-1 < n <= n/mean(Gr), so Graffiti 295 holds strictly under the declared normalization.",
+        "contribution": "Recognized that the fresh uniform mean-gravity bound composes with an elementary distance-matrix inertia observation to settle the separately recorded conjecture, then audited definitions, boundaries, finite cases, and current priority surfaces.",
+        "mechanism": null,
+        "limitations": [
+          "Specialist confirmation of the historical graph and gravity conventions is pending.",
+          "The crucial mean-gravity inequality is an existing upstream result and must be credited.",
+          "Historical priority is not claimed."
+        ],
+        "next_actions": [],
+        "result_type": "theorem",
+        "mathematical_status": "proved_under_declared_conventions"
+      }
+    },
+    {
+      "case_id": "helix-memory-14",
+      "visible_consequence": {
+        "title": "An Explicit All-Degree Global Sign-Safe Correction Trade",
+        "exact_result": "For every D>=2 there is a width-two monotone DNF with a sign-safe correction object of pure high degree D. The unique outside support point is rejected; every positive promised support point is accepted. The correction l1 norm is exactly 2^D.",
+        "contribution": "Imported without rewriting historical wording.",
+        "mechanism": null,
+        "limitations": [
+          "Migration does not independently re-prove the report.",
+          "External correctness, priority, and significance remain separate review axes.",
+          "Run manifest was preserved without rewriting."
+        ],
+        "next_actions": [
+          "Freeze a concrete finite Bun-Thaler instance, its component dual witnesses, and its exact preliminary coefficient array.",
+          "Search that instantiated accepted/rejected incidence system for threshold-two parity-trade minors.",
+          "Test orbit couplings when no single rejected point admits the minor.",
+          "Audit total correction norm."
+        ],
+        "result_type": "theorem",
+        "mathematical_status": "proved_under_declared_conventions"
+      }
+    },
+    {
+      "case_id": "helix-memory-15",
+      "visible_consequence": {
+        "title": "Exact Two-Delete/Two-Add Exhaustion for the 111-Edge Attack",
+        "exact_result": "After deleting any two points of the GEOM-2DIST-001 configuration and inserting any two arbitrary Euclidean points, the resulting full {1,sqrt(3)} distance graph is 5-colorable whenever it has at most 111 edges.",
+        "contribution": "Imported without rewriting historical wording.",
+        "mechanism": "exact_Q_sqrt3_sqrt5_circle_intersection_enumeration; rigorous_rational_box_candidate_partition; exact_candidate_specific_quadratic_extensions; exact_biquadratic_mutual_distance_tests; exact_complete_case_key_comparison; 43312_explicit_five_colorings; independent_cpp_edge_by_edge_verification",
+        "limitations": [
+          "Migration does not independently re-prove the report.",
+          "External correctness, priority, and significance remain separate review axes.",
+          "Run manifest was preserved without rewriting.",
+          "does_not_prove_global_33_vertex_edge_optimality",
+          "does_not_prove_nonexistence_of_111_edge_graphs_outside_this_exchange_basin",
+          "does_not_certify_three_point_or_larger_exchanges",
+          "does_not_prove_global_32_vertex_nonexistence",
+          "historical_priority_requires_specialist_review"
+        ],
+        "next_actions": [
+          "Exactify the two-new-for-three-old 32-point neighborhood.",
+          "Exactify three-delete/three-add exchanges for the <=111-edge attack.",
+          "Search globally outside the current exchange neighborhood.",
+          "Obtain direct author and specialist priority review."
+        ],
+        "result_type": "exact_local_nonimprovement_theorem_and_finite_coloring_certificates",
+        "mathematical_status": "candidate"
+      }
+    },
+    {
+      "case_id": "helix-memory-16",
+      "visible_consequence": {
+        "title": "Global Sign-Safe Corrections Are Combinatorial Trades",
+        "exact_result": "A slice-supported signed measure has pure high degree D exactly when it is a weighted [D-1]-trade. At weight two and degree two, the trade condition is zero vertex incidence in a signed graph. An exact eight-variable aggregate correction succeeds as an alternating accepted/rejected four-cycle. The bounded promised function has positive one-sided approximate degree exactly two at error 1/3.",
+        "contribution": "Imported without rewriting historical wording.",
+        "mechanism": null,
+        "limitations": [
+          "Migration does not independently re-prove the report.",
+          "External correctness, priority, and significance remain separate review axes.",
+          "Run manifest was preserved without rewriting.",
+          "No trade for the full Bun-Thaler promised amplifier is constructed.",
+          "No general aggregate correction theorem is proved.",
+          "No exponent improvement is claimed.",
+          "Historical priority of the complexity application is unconfirmed."
+        ],
+        "next_actions": [
+          "Search for higher-order trades in bounded symmetric amplifier instances.",
+          "Test recursive products of accepted/rejected trades.",
+          "Compare trade volume and correlation under Bun-Thaler block composition."
+        ],
+        "result_type": "theorem",
+        "mathematical_status": "proved_under_declared_conventions"
+      }
+    },
+    {
+      "case_id": "helix-memory-17",
+      "visible_consequence": {
+        "title": "Exact No-Go Theorem for Affine Scalar Composition of the Six-Bit Shell Pair",
+        "exact_result": "The degree-at-most-four vanishing space on the 225-state product shell has dimension two and is spanned by the two inherited quartic shell identities. Any affine pair whose unit shells cover the product shell is trivial: it projects to one input block, up to swapping and signs, or one checker is identically plus or minus one. No nontrivial affine scalar composition of two shell copies exists over the reals.",
+        "contribution": "Imported without rewriting historical wording.",
+        "mechanism": null,
+        "limitations": [
+          "Migration does not independently re-prove the report.",
+          "External correctness, priority, and significance remain separate review axes.",
+          "Run manifest was preserved without rewriting.",
+          "Historical priority is unconfirmed.",
+          "The theorem rules out affine scalar composition only; nonlinear and vector-valued constructions remain open.",
+          "No stronger complexity separation than the existing factor-three construction is established."
+        ],
+        "next_actions": [
+          "Test nonlinear scalar combinations and vector-valued composition rules.",
+          "Seek an independent proof audit of the affine-factor argument.",
+          "Confirm historical priority before external circulation."
+        ],
+        "result_type": "theorem",
+        "mathematical_status": "proved_under_declared_conventions"
+      }
+    },
+    {
+      "case_id": "helix-memory-18",
+      "visible_consequence": {
+        "title": "Sharp Error Threshold for the Six-Bit Near-Parity Seed",
+        "exact_result": "For 0<=epsilon<1/5, N_epsilon(h)=N_epsilon(complement h)=3. For 1/5<=epsilon<1, N_epsilon(h)=N_epsilon(complement h)=2. The exact nondeterministic degrees of h and its complement both equal 3. Explicit quadratic witnesses attain error 1/5. Exact l1 evaluation identities prove degree two impossible below error 1/5.",
+        "contribution": "Imported without rewriting historical wording.",
+        "mechanism": "PASS exact rational arithmetic and monomial identities",
+        "limitations": [
+          "Migration does not independently re-prove the report.",
+          "External correctness, priority, and significance remain separate review axes.",
+          "Run manifest was preserved without rewriting.",
+          "The result sharpens the finite and infinite factor-three program but does not exceed factor three or refute the polynomial-form conjecture.",
+          "Main-agent exact relation and proof audit passed on 2026-07-28; see RESEARCH-HISTORY-002/PacketAudit.md."
+        ],
+        "next_actions": [
+          "Determine whether the 1/5 phase transition lifts exactly under parity substitution.",
+          "Search for a k>3d seed outside two-block Hamming-weight symmetry.",
+          "Extract portable infeasibility certificates for seven-bit paired-quadratic searches.",
+          "Obtain independent specialist review and contact the authors of arXiv:2605.23336."
+        ],
+        "result_type": "exact_error_phase_transition_and_exact_nondeterministic_degree",
+        "mathematical_status": "proved_under_declared_conventions"
+      }
+    },
+    {
+      "case_id": "helix-memory-19",
+      "visible_consequence": {
+        "title": "Human Structural Proof for the 109-Edge Six-Chromatic Graph",
+        "exact_result": "GEOM-2DIST-003 exact result: vertices=33; sparse_edges=109; gadget_edges=101; bridge_edges=8; source_gadgets=1; relay_gadgets=5; sink_gadgets=1; chromatic_number=6.",
+        "contribution": "Imported without rewriting historical wording.",
+        "mechanism": "near_clique_color_class_lemma; two_induced_K7_minus_3K2_gadgets; five_induced_K6_minus_2K2_relay_gadgets; eight_bridge_incompatibilities; three_source_to_sink_implication_arms; explicit_six_coloring_from_base_run",
+        "limitations": [
+          "Migration does not independently re-prove the report.",
+          "External correctness, priority, and significance remain separate review axes.",
+          "Run manifest was preserved without rewriting.",
+          "does_not_prove_nonexistence_on_32_vertices",
+          "does_not_prove_global_33_vertex_edge_optimality",
+          "does_not_replace_external_priority_review"
+        ],
+        "next_actions": [
+          "Use the relay structure to guide exact two-point exchange searches.",
+          "Search for smaller geometric realizations of the same abstract obstruction.",
+          "Obtain specialist review of the 112-edge configuration and the human proof.",
+          "Test which relay-arm modifications preserve exact geometric realizability."
+        ],
+        "result_type": "human_verifiable_chromatic_lower_bound_and_structural_template",
+        "mathematical_status": "deterministically_verified_finite"
+      }
+    },
+    {
+      "case_id": "helix-memory-20",
+      "visible_consequence": {
+        "title": "Exact One-Point Replacement Exhaustion",
+        "exact_result": "Any 33-point set obtained from the GEOM-2DIST-001 configuration by deleting one point and adding one arbitrary Euclidean point is 5-colorable whenever its full {1,sqrt(3)} distance graph has at most 111 edges.",
+        "contribution": "Imported without rewriting historical wording.",
+        "mechanism": "exact_circle_intersection_enumeration; exact_Q_sqrt3_sqrt5_candidate_reconstruction; exact_candidate_specific_quadratic_extensions; exact_adjacency_reconstruction; point_injection_checks; 159_explicit_five_colorings",
+        "limitations": [
+          "Migration does not independently re-prove the report.",
+          "External correctness, priority, and significance remain separate review axes.",
+          "Run manifest was preserved without rewriting.",
+          "does_not_prove_global_33_vertex_edge_optimality",
+          "does_not_prove_nonexistence_on_32_vertices",
+          "does_not_certify_multi_point_exchange_screens",
+          "historical_priority_requires_specialist_review"
+        ],
+        "next_actions": [
+          "Exactify the one-new-for-two-old 32-point screen.",
+          "Exactify the two-for-two <=111-edge screen.",
+          "Search globally outside the current exchange neighborhood.",
+          "Obtain direct author and specialist priority review."
+        ],
+        "result_type": "exact_local_nonimprovement_theorem_and_finite_certificates",
+        "mathematical_status": "deterministically_verified_finite"
+      }
+    },
+    {
+      "case_id": "helix-memory-21",
+      "visible_consequence": {
+        "title": "Certificate-Anchored Correction and the Exact Rejected-Tail Obstruction",
+        "exact_result": "The standard top-point correction kernel has low-layer sign (-1)^(D-r). No pure-degree-at-least-two pointwise kernel can cancel one rejected top point with all low coefficients nonpositive. Every accepted tail point with a positive certificate C and |C|+D-1<=N has a sign-safe certificate-anchored correction. Accepted outside-promise mass can be removed without creating rejected promised support.",
+        "contribution": "Imported without rewriting historical wording.",
+        "mechanism": "symbolic interpolation; moment identities; certificate anchoring; exact rational verification",
+        "limitations": [
+          "Migration does not independently re-prove the report.",
+          "External correctness, priority, and significance remain separate review axes.",
+          "Run manifest was preserved without rewriting."
+        ],
+        "next_actions": [
+          "Reconstruct rejected tail coefficients by Hamming type.",
+          "Search for exact pairwise or orbitwise low-layer cancellation circuits.",
+          "Extract a rational circuit or a dual infeasibility obstruction."
+        ],
+        "result_type": "barrier_theorem",
+        "mathematical_status": "proved_under_declared_conventions"
+      }
+    },
+    {
+      "case_id": "helix-memory-22",
+      "visible_consequence": {
+        "title": "One-Y-Leg Boundary and Proof-Mechanism Search",
+        "exact_result": "CONJECTURE-003 exact result: original_candidate_status=killed_by_four_exact_counterexamples; original_candidate_objects=1714; original_candidate_alpha=1710; proved_nonalpha=4; corrected_candidate=Every maximum-degree-three lobster of diameter at least six having a spine with exactly one Y-leg and no forbidden endings has an alpha-labeling.; corrected_candidate_status=survives_finite_test_not_proved; corrected_candidate_objects=1703; corrected_candidate_alpha_certificates=1703; leaf_restoration_sufficient_condition_found=1702; leaf_restoration_exact_obstructions=1; new_theorem_proved=False; novelty_established=False; selected_next_target=Construct and falsify a Y-containing Kotzig pi-representation block compatible with the 2019 block-linking framework..",
+        "contribution": "Imported without rewriting historical wording.",
+        "mechanism": null,
+        "limitations": [
+          "Migration does not independently re-prove the report.",
+          "External correctness, priority, and significance remain separate review axes.",
+          "Run manifest was preserved without rewriting."
+        ],
+        "next_actions": [],
+        "result_type": "theorem",
+        "mathematical_status": "candidate"
+      }
+    },
+    {
+      "case_id": "helix-memory-23",
+      "visible_consequence": {
+        "title": "Exact Nondeterministic Degree Five for the Twelve-Bit Parity Lift",
+        "exact_result": "ndeg(H_2)=5 ndeg(complement H_2)=5 degree four cannot contain any nonzero polynomial vanishing on the zero set an explicit degree-five integer witness has 560 monomials with coefficients +/-1",
+        "contribution": "Imported without rewriting historical wording.",
+        "mechanism": null,
+        "limitations": [
+          "Migration does not independently re-prove the report.",
+          "External correctness, priority, and significance remain separate review axes.",
+          "Run manifest was preserved without rewriting.",
+          "historical novelty unconfirmed",
+          "superseded in scope by the all-size law in BOOLEAN-LIFT-NDEG-LAW-008",
+          "no improvement to the asymptotic polynomial-form conjecture",
+          "Main-agent exact finite replay passed on 2026-07-28; see RESEARCH-HISTORY-002/PacketAudit.md.",
+          "no all-m formula proved"
+        ],
+        "next_actions": [
+          "derive weighted-fiber formula for arbitrary block size m",
+          "test whether ndeg(H_m)=2m+1",
+          "classify the exact error threshold of H_2",
+          "obtain independent specialist review"
+        ],
+        "result_type": "exact_finite_classification_and_nonmultiplicativity",
+        "mathematical_status": "deterministically_verified_finite"
+      }
+    },
+    {
+      "case_id": "helix-memory-24",
+      "visible_consequence": {
+        "title": "Square-Root Approximate Nondeterministic Degree of One Bun-Thaler Totalization Side",
+        "exact_result": "For a width-w, L-clause DNF on n variables, the distinguished f-star output has N_epsilon at most O(w+sqrt(n log(2L/epsilon))). If the DNF has a satisfiable clause of size t, the same measure is at least Omega(sqrt(n-t)) for constant epsilon. For the Bun-Thaler hard core, this output side has approximate nondeterministic degree n^(1/2+o(1)).",
+        "contribution": "Imported without rewriting historical wording.",
+        "mechanism": "PASS symbolic proof audit; finite exhaustive structure regression",
+        "limitations": [
+          "Migration does not independently re-prove the report.",
+          "External correctness, priority, and significance remain separate review axes.",
+          "Run manifest was preserved without rewriting.",
+          "The opposite output side of f-star is not classified.",
+          "No improved upper bound for the complete block-composed Bun-Thaler function is claimed.",
+          "The polynomial-form conjecture remains open.",
+          "Historical priority of this direct measure calculation is unconfirmed."
+        ],
+        "next_actions": [
+          "Classify the opposite no-clause output side of f-star.",
+          "Develop a composition theorem that transports normalized one-sided witnesses through the inner majority-DNF block.",
+          "Use the classified side to sharpen direct bounds for the complete Bun-Thaler family.",
+          "Obtain specialist review."
+        ],
+        "result_type": "direct_one_sided_measure_classification_for_totalization_layer",
+        "mathematical_status": "proved_with_external_theorem_dependency"
+      }
+    },
+    {
+      "case_id": "helix-memory-25",
+      "visible_consequence": {
+        "title": "A Universal Five-Halves Law for One-Pair Parity Surgery",
+        "exact_result": "Every surgery belongs to one of two cube-symmetry classes, represented by exchange distance one or three. For every such seed g and every m>=1, ndeg(G_m)=ndeg(complement G_m)=ceil(5m/2). Both geometry classes have exact degree-five witnesses for their two-bit parity lifts using only monomial types (3,1), (3,3), (5,1), and (5,3). The arbitrary-m lower bound is symbolic and does not rely on MILP or finite extrapolation. Via de Wolf's characterization, NQ(G_m)=NQ(complement G_m)=ceil(5m/2).",
+        "contribution": "Imported without rewriting historical wording.",
+        "mechanism": "Exact rational reconstruction of both canonical witness polynomials.; Exhaustive evaluation on all 4096 inputs of each two-bit parity lift.; Full degree-at-most-two evaluation rank on both outputs for all sixteen normalized surgeries.; Independent symbolic lower proof via antipodal Fourier pairing and fractional-ball geometry.",
+        "limitations": [
+          "Migration does not independently re-prove the report.",
+          "External correctness, priority, and significance remain separate review axes.",
+          "Run manifest was preserved without rewriting.",
+          "Historical priority is unconfirmed.",
+          "Publication significance requires external specialist review.",
+          "The distance-one 7/11 threshold is separately certified in BOOLEAN-DIST1-ERROR-THRESHOLD-011.",
+          "Main-agent symbolic and exact packet audit passed on 2026-07-28; see RESEARCH-HISTORY-002/PacketAudit.md.",
+          "The apparent 7/11 quadratic-error threshold for the distance-one class is not part of this theorem until a portable lower certificate is preserved."
+        ],
+        "next_actions": [
+          "Complete a focused primary-literature priority audit.",
+          "Prove or refute the apparent 7/11 error threshold for the distance-one geometry.",
+          "Classify multi-pair parity surgeries and test whether new exact slopes occur.",
+          "Continue the Bun-Thaler complementary-output program."
+        ],
+        "result_type": "exact_geometric_classification_and_composition_theorem",
+        "mathematical_status": "proved_under_declared_conventions"
+      }
+    },
+    {
+      "case_id": "helix-memory-26",
+      "visible_consequence": {
+        "title": "Stronger induced-tree girth theorem resolving WOWII 141",
+        "exact_result": "For connected cyclic graphs with girth at least four, tree(G) >= Delta(G)+girth(G)-3; consequently the exact historical WOWII 141 inequality holds.",
+        "contribution": "Recovered and audited a universal proof, preserved the stronger bound tree(G) >= Delta(G)+girth(G)-3, identified the odd-girth transcription mismatch, and attached exact finite verification.",
+        "mechanism": null,
+        "limitations": [
+          "External specialist review is pending.",
+          "Historical priority is not claimed.",
+          "The open formal-conjectures target uses floor division at odd girth and should be corrected or explicitly interpreted."
+        ],
+        "next_actions": [],
+        "result_type": "theorem",
+        "mathematical_status": "proved_under_declared_conventions"
+      }
+    }
+  ],
+  "choices": [
+    "unclear",
+    "useful-note",
+    "structural-paper"
+  ],
+  "tier_definitions": {
+    "unclear": "The retained result does not yet justify a stronger importance class.",
+    "useful-note": "Useful progress or a result suitable for a bounded research note, without structural-paper status.",
+    "structural-paper": "Structurally important or paper-level progress within the retained claim boundary."
+  },
+  "answers_exposed": false,
+  "claim_authority": false
+}
